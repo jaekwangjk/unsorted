@@ -1,0 +1,11 @@
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/rebuild_cache.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/info.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/strip_comments.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/distclean.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/debug.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/runclean.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/run.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/release.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/sign.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/edit_cache.dir
+/Users/jaekwangkim/codes/MyAdjProject/Oldroyd_B_stabilizaiton/couette/CMakeFiles/oldroyd_b_couette.dir
