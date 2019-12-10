@@ -1,15 +1,9 @@
 
 """
-Created on Wed Jan 24 21:34:49 2018
-
-@author: javierseguradoescudero
-
-@ Jaekwang's memo
-It seems that the codes is dealing with shirinking boundaries
-
-This does larger time stepping at later times... why?
-
-"""
+    @ Jaekwang's memo
+    It seems that the codes is dealing with shirinking boundaries
+    This does larger time stepping at later times... why?
+    """
 
 
 # 3D-KWC model implementation using quaternions
@@ -62,27 +56,53 @@ def dp(gradu):
 mesh = RectangleMesh(Point(-L,-L), Point(L, L), 20, 20, "right")
 
 # Function Spaces
-P2 = FiniteElement('CG',mesh.ufl_cell(), 2) 
+P2 = FiniteElement('CG',mesh.ufl_cell(), 2)
 element = MixedElement([P2, P2])
-V = FunctionSpace(mesh, element) 
+V = FunctionSpace(mesh, element)
 
 # Define boundary condition
 theta1=0.
 theta2=np.pi/12.
+theta3=np.pi/6.
 
 
 def boundary(x, on_boundary):
     return on_boundary
-#smooth function of orientation change near center
-bound = Expression(('1.','(x[0]/L)*(x[0]/L)+(x[1]/L)*(x[1]/L)<=0.25  ? theta2 : theta1'), degree=2,L=L,theta1=theta1,theta2=theta2)
+
+
+class InitialCondition(UserExpression):
+    def eval(self, value, x):
+        value[0] = 1 # \phi
+        
+        if (x[0] <0.2):
+            
+            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            
+            if (x[1]>temp1):
+                value[1]=theta2
+            else:
+                value[1]=theta3
+        
+        else:
+            value[1]=theta1
+
+    def value_shape(self):
+        return (2,)
+
+
+bound = InitialCondition(degree=2)
+
+
+
 # Define funcions in the FE space
-w1,w2 = TestFunctions(V) 
+w1,w2 = TestFunctions(V)
 u = Function(V) #solution field in t+dt
 u_n = Function(V) #solution field in t
 
 phi,theta= split(u) # Labels for the two coupled fields
 
-u_n = interpolate(bound,V) # Initial field value u(t=0) 
+u_n = interpolate(bound,V) # Initial field value u(t=0)
 phi_n,theta_n = split(u_n)
 bc = DirichletBC(V, bound, boundary)  # BC for initial field
 
@@ -116,17 +136,15 @@ F=  (b_phi/dt)*w1*phi*dx  \
 vtkfile_phi= File('2D_KWC/phi.pvd')
 vtkfile_theta= File('2D_KWC/theta.pvd')
 
-# Create progress bar
-#progress = Progress('Time-stepping')
-#set_log_level(PROGRESS)
 
-## Time intrementation 
+## Time intrementation
 
 print('first step')
 inc=0
 dt=.001*b_phi
 t=0
 tend=1E6*dt
+tend=1
 inc=0.
 while t<tend:
     F=  (b_phi/dt)*w1*phi*dx  \
@@ -144,14 +162,12 @@ while t<tend:
         t+=dt
         solve(F==0,u,bc)
         u_n.assign(u)
-        if( int(num_plot*(t/tend)) != int(num_plot*((t-dt)/tend))): # to store solution only 
+        if( int(num_plot*(t/tend)) != int(num_plot*((t-dt)/tend))): # to store solution only
             #print t
             phi_v , theta_v=u.split()
-## Save solution to file (VTK)
+            ## Save solution to file (VTK)
             vtkfile_phi << (phi_v,t)
             vtkfile_theta << (theta_v, t)
     #progress.update(t / tend)
     dt=dt*10
     print('new dt',dt)
-
-
