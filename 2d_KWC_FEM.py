@@ -1,12 +1,4 @@
-
-"""
-    @ Jaekwang's memo
-    It seems that the codes is dealing with shirinking boundaries
-    This does larger time stepping at later times... why?
-    """
-
-
-# 3D-KWC model implementation using quaternions
+# KWC model implementation using quaternions
 # See notes for the details of implementation
 
 from fenics import *
