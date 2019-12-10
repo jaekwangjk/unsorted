@@ -1,14 +1,8 @@
 
 """
-Created on Wed Jan 24 21:34:49 2018
-
-@author: javierseguradoescudero
-
 @ Jaekwang's memo
 It seems that the codes is dealing with shirinking boundaries
-
 This does larger time stepping at later times... why?
-
 """
 
 
