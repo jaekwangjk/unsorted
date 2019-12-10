@@ -1,13 +1,3 @@
-# KWC model implementation using quaternio
-
-"""
-    @ Jaekwang's memo
-    It seems that the codes is dealing with shirinking boundaries
-    This does larger time stepping at later times... why?
-    """
-# 3D-KWC model implementation using quaternions
-
-# See notes for the details of implementation
 
 from fenics import *
 import matplotlib.pyplot as plt
@@ -15,8 +5,7 @@ import numpy as np
 import sympy as sym
 import math
 
-# Some orientation manipulation function
-# From rotation to quaternion (to define initial BCs)
+#I need to fix scaling: does it convergent to all orders of parameters?
 
 #Constants
 alpha2=0.00530
@@ -53,7 +42,7 @@ def dp(gradu):
     return gradu/(sqrt(dot(gradu,gradu)+mu))
 
 
-mesh = RectangleMesh(Point(-L,-L), Point(L, L), 20, 20, "right")
+mesh = RectangleMesh(Point(0,0), Point(L, L), 20, 20, "right")
 
 # Function Spaces
 P2 = FiniteElement('CG',mesh.ufl_cell(), 2)
@@ -62,8 +51,8 @@ V = FunctionSpace(mesh, element)
 
 # Define boundary condition
 theta1=0.
-theta2=np.pi/12.
-theta3=np.pi/6.
+theta2=np.pi/6.
+theta3=np.pi/3.
 
 
 def boundary(x, on_boundary):
@@ -74,26 +63,32 @@ class InitialCondition(UserExpression):
     def eval(self, value, x):
         value[0] = 1 # \phi
         
-        if (x[0] <0.2):
+        if (x[0] <2):
             
-            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
-            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            temp1= (10.0 - 5)/(0.0-2) * (x[0]-2) + 5
+            temp2= -(10.0 - 5)/(0.0-2) * (x[0]-2) + 5
             
             if (x[1]>temp1):
-                value[1]=theta2
-            else:
                 value[1]=theta3
-        
-        else:
-            value[1]=theta1
+            
+            elif(x[1]<temp1 and x[1]>temp2):
+                value[1]=theta2
+            
+            else:
+                value[1]=theta1
 
-def value_shape(self):
-    return (2,)
+        else:
+            if (x[1]>5):
+                value[1]=theta3
+            else:
+                value[1]=theta1
+
+    def value_shape(self):
+
+        return (2,)
 
 
 bound = InitialCondition(degree=2)
-
-
 
 # Define funcions in the FE space
 w1,w2 = TestFunctions(V)
