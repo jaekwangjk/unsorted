@@ -10,6 +10,7 @@ import math
 #Constants
 alpha2=0.00530
 epsilon2= 0.00021333
+epsilon = math.sqrt(epsilon2)
 s=0.0017
 e=0.0021
 gamma=250
@@ -19,52 +20,46 @@ L=10.
 mu=1E-5
 
 # f and g functions in KWC model
-phi=sym.symbols('phi')
-f=e*(phi-1)**2 # Symbolic f
-fprim=sym.diff(f,phi) # Symbolic df/dphi
-f_code=sym.printing.ccode(f) # Expression f
-fprim=sym.lambdify(phi,fprim) # Python function df/dphi
 
-g=phi**2 # Symbolic g
-gprim=sym.diff(g,phi) # Symbolic dg/dphi
-g_code=sym.printing.ccode(g) # Expression g
-gprim = sym.lambdify(phi,gprim)# Python function dg/dphi
-g=sym.lambdify(phi,g)
-#
 
-## Cruzial: An smooth definition of p(grad) and p'(grad)
+def ffun(phi):
+    return 0.5*(1/epsilon2)*(phi-1)*(phi-1)
+
+def gfun(phi):
+    return -2.*(ln(1.02-phi)+phi)
 
 
 def p(gradu):
-    return sqrt(dot(gradu,gradu)+mu)
-#
+    return sqrt(dot(gradu,gradu)+mu*mu)
+
 def dp(gradu):
-    return gradu/(sqrt(dot(gradu,gradu)+mu))
+    return gradu/p(gradu)
 
 
-mesh = RectangleMesh(Point(0,0), Point(L, L), 20, 20, "right")
 
-# Function Spaces
-P2 = FiniteElement('CG',mesh.ufl_cell(), 2)
-element = MixedElement([P2, P2])
-V = FunctionSpace(mesh, element)
+mesh = UnitSquareMesh.create( 80, 80, CellType.Type.quadrilateral)
 
-# Define boundary condition
+element_esc = FiniteElement('Lagrange',mesh.ufl_cell(),1) #element order
+element_Z = FiniteElement('Lagrange', mesh.ufl_cell(),1) #linear element
+element_mixed = MixedElement([element_esc,element_Z])
+
+V = FunctionSpace(mesh, element_mixed)
+q_degree = 6
+dx = dx(metadata={'quadrature_degree': q_degree})
+
+
+
+# Define Initial Condition boundary condition
 theta1=0.
 theta2=np.pi/6.
 theta3=np.pi/3.
 
-
-def boundary(x, on_boundary):
-    return on_boundary
-
-
 class InitialCondition(UserExpression):
     def eval(self, value, x):
-        value[0] = 1 # \phi
+
+        value[0]=1 #bc for phi
         
         if (x[0] <2):
-            
             temp1= (10.0 - 5)/(0.0-2) * (x[0]-2) + 5
             temp2= -(10.0 - 5)/(0.0-2) * (x[0]-2) + 5
             
@@ -84,56 +79,86 @@ class InitialCondition(UserExpression):
                 value[1]=theta1
 
     def value_shape(self):
-
         return (2,)
 
 
-bound = InitialCondition(degree=2)
+def boundary(x, on_boundary):
+    return on_boundary
 
-# Define funcions in the FE space
-w1,w2 = TestFunctions(V)
+
+class boundary_grains(UserExpression):
+    def eval(self, value, x):
+        
+        if (x[0] <2):
+        
+            temp1= (10.0 - 5)/(0.0-2) * (x[0]-2) + 5
+            temp2= -(10.0 - 5)/(0.0-2) * (x[0]-2) + 5
+        
+            if (x[1]>temp1):
+                value[0]=theta3
+            
+            elif(x[1]<temp1 and x[1]>temp2):
+                value[0]=theta2
+        
+            else:
+                value[0]=theta1
+        
+        else:
+            if (x[1]>5):
+                value[0]=theta3
+            else:
+                value[0]=theta1
+
+            value[0]=value[0]
+
+    def value_shape(self):
+        return ()  #return scalr
+
+
+
+expression_un=InitialCondition(degree=2)
+expression_GB=boundary_grains(degree=2)
+
+bound_phi = Constant('1')
+bc_phi = DirichletBC(V.sub(0), bound_phi, boundary)  # BC for initial field
+bc_theta = DirichletBC(V.sub(1), expression_GB, boundary)
+
+bc = [bc_theta] ## It seems that only bc of theta is implemented?
+
+du = TestFunction(V)
+dphi,dtheta = split(du)
 u = Function(V) #solution field in t+dt
 u_n = Function(V) #solution field in t
-
+u_n2 = Function(V)
+utrial = TrialFunction(V)
 phi,theta= split(u) # Labels for the two coupled fields
 
-u_n = interpolate(bound,V) # Initial field value u(t=0)
+u_n = interpolate(expression_un,V)
 phi_n,theta_n = split(u_n)
-bc = DirichletBC(V, bound, boundary)  # BC for initial field
 
-# Define variational problem
-# Note that in F might enter python functions of u and expressions of x
 
-dt=.001*b_phi
+num_plot=2 # number of frames saved
 
-num_plot=100 # number of frames saved
-
-# This is to force a given integration rule, here the exact one is too large
-q_degree = 3
-dx = dx(metadata={'quadrature_degree': q_degree})
-#
 
 # Variational non-linear form, find u such F(u,w)=0
 # Note that implicit backward Euler is used for time integration
-F=  (b_phi/dt)*w1*phi*dx  \
-+ alpha2 * dot( grad(w1) , grad(phi) )*dx \
-+ w1*fprim(phi)*dx \
-+ s*w1*gprim(phi)*p(grad(theta))*dx \
-+ -(b_phi/dt)*w1*phi_n*dx  \
-+ (b_theta/dt)*w2*theta*dx \
-+ epsilon2*dot( grad(w2),grad(theta) )*dx \
-+ s*g(phi)*dot( dp(grad(theta)) , grad(w2) )*dx \
-+ -(b_theta/dt)*w2*theta_n*dx
+t=0.
+dt=1e-3
+tend=dt * 3
 
-##Full implicit
 
-# Create VTK files for visualization output
-vtkfile_phi= File('2D_KWC/phi.pvd')
-vtkfile_theta= File('2D_KWC/theta.pvd')
+
+
+
+
+
+print("Progam finished successfully")
+
+
 
 
 ## Time intrementation
-
+'''
 print('first step')
 inc=0
 dt=.001*b_phi
@@ -167,3 +192,70 @@ while t<tend:
     dt=dt*10
     print('new dt',dt)
 
+
+'''
+
+
+
+'''
+# Define funcions in the FE space
+w1,w2 = TestFunctions(V)
+u = Function(V) #solution field in t+dt
+u_n = Function(V) #solution field in t
+phi,theta= split(u) # Labels for the two coupled fields
+u_n = interpolate(bound,V) # Initial field value u(t=0)
+phi_n,theta_n = split(u_n)
+bc = DirichletBC(V, bound, boundary)  # BC for initial field
+
+# Define variational problem
+# Note that in F might enter python functions of u and expressions of x
+
+dt=.001*b_phi
+
+num_plot=100 # number of frames saved
+
+# This is to force a given integration rule, here the exact one is too large
+q_degree = 3
+dx = dx(metadata={'quadrature_degree': q_degree})
+#
+
+# Variational non-linear form, find u such F(u,w)=0
+# Note that implicit backward Euler is used for time integration
+F=  (b_phi/dt)*w1*phi*dx  \
++ alpha2 * dot( grad(w1) , grad(phi) )*dx \
++ w1*fprim(phi)*dx \
++ s*w1*gprim(phi)*p(grad(theta))*dx \
++ -(b_phi/dt)*w1*phi_n*dx  \
++ (b_theta/dt)*w2*theta*dx \
++ epsilon2*dot( grad(w2),grad(theta) )*dx
+#\ + s*g(phi)*dot( dp(grad(theta)) , grad(w2) )*dx \
++ -(b_theta/dt)*w2*theta_n*dx
+
+##Full implicit
+
+# Create VTK files for visualization output
+vtkfile_phi= File('2D_KWC/phi.pvd')
+vtkfile_theta= File('2D_KWC/theta.pvd')
+
+
+
+
+
+
+'''
+'''
+    phi=sym.symbols('phi')
+    f=e*(phi-1)**2 # Symbolic f
+    fprim=sym.diff(f,phi) # Symbolic df/dphi
+    f_code=sym.printing.ccode(f) # Expression f
+    fprim=sym.lambdify(phi,fprim) # Python function df/dphi
+    
+    g=phi**2 # Symbolic g
+    
+    #g= -ln(1-phi)
+    gprim=sym.diff(g,phi) # Symbolic dg/dphi
+    g_code=sym.printing.ccode(g) # Expression g
+    gprim = sym.lambdify(phi,gprim)# Python function dg/dphi
+    g=sym.lambdify(phi,g)
+    
+'''
