@@ -212,10 +212,10 @@ namespace MyStokes
             DoFTools::make_hanging_node_constraints (dof_handler,
                                                      constraints);
             
-            //boundary_id =2,3 top and bottom wall
+            //boundary_id =1,3 side wall
             
             VectorTools::interpolate_boundary_values (dof_handler,
-                                                      2,
+                                                      1,
                                                       ZeroFunction<dim>(dim+1),
                                                       constraints,
                                                       fe.component_mask(velocities));
@@ -229,16 +229,16 @@ namespace MyStokes
             //in and out let - create 1-dimensional flow
             
             VectorTools::interpolate_boundary_values (dof_handler,
-                                                      1,
+                                                      2,
                                                       ZeroFunction<dim>(dim+1),
                                                       constraints,
-                                                      fe.component_mask(yvel));
+                                                      fe.component_mask(xvel));
             
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       4,
                                                       ZeroFunction<dim>(dim+1),
                                                       constraints,
-                                                      fe.component_mask(yvel));
+                                                      fe.component_mask(xvel));
            
             
         }
@@ -389,7 +389,7 @@ namespace MyStokes
             
             for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
             {
-                if (cell->face(face_no)->boundary_id()==1)
+                if (cell->face(face_no)->boundary_id()==2)
                 {
                     fe_face_values.reinit (cell, face_no);
                     
@@ -559,7 +559,7 @@ namespace MyStokes
         repetitions_a[1]=1;   //2;
         GridGenerator::subdivided_hyper_rectangle (triangulation, repetitions_a,
                                                    Point<2>(0.0,0.0),
-                                                   Point<2>(10.0,1.0));
+                                                   Point<2>(1.0,10.0));
      
         triangulation.refine_global(3);
         //To designate boundray condition--loop over all faces.
@@ -577,30 +577,29 @@ namespace MyStokes
                     static const double tol = 1e-12;
                
                     // Boundary faces
-                    
                     if ( std::abs(cell->face(f)->center()[0]-0.0)< tol )
                     {
-                        //inlet
+                        //side wall
                         cell->face(f)->set_boundary_id(1);
-                        //std::cout << "boundary 1 is created" << std::endl;
-                    }
-                    if ( std::abs(cell->face(f)->center()[1]-1.0)< tol )
-                    {
-                        //top-wall
-                        cell->face(f)->set_boundary_id(2);
-                        //std::cout << "boundary 2 is created" << std::endl;
+                        std::cout << "boundary 1 is created" << std::endl;
                     }
                     if ( std::abs(cell->face(f)->center()[1]-0.0)< tol )
                     {
-                        //bottom wall
-                        cell->face(f)->set_boundary_id(3);
-                        //std::cout << "boundary 3 is created" << std::endl;
+                        //in-let
+                        cell->face(f)->set_boundary_id(2);
+                        std::cout << "boundary 2 is created" << std::endl;
                     }
-                    if ( std::abs(cell->face(f)->center()[0]-10.0)< tol )
+                    if ( std::abs(cell->face(f)->center()[0]-1.0)< tol )
+                    {
+                        //side-wall
+                        cell->face(f)->set_boundary_id(3);
+                        std::cout << "boundary 3 is created" << std::endl;
+                    }
+                    if ( std::abs(cell->face(f)->center()[1]-10.0)< tol )
                     {
                         //outlet
                         cell->face(f)->set_boundary_id(4);
-                        //std::cout << "boundary 4 is created" << std::endl;
+                        std::cout << "boundary 4 is created" << std::endl;
                     }
                 }
             }
