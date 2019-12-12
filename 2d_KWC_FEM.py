@@ -1,4 +1,3 @@
-
 from fenics import *
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +20,9 @@ mu=1E-5
 
 # f and g functions in KWC model
 
+def b_theta(phi):
+    #return 1./(mvmin+(1.-phi**3*(10.-15.*phi+6.*phi**2))*(mvmax-mvmin))
+    return 1
 
 def ffun(phi):
     return 0.5*(1/epsilon2)*(phi-1)*(phi-1)
@@ -59,9 +61,9 @@ class InitialCondition(UserExpression):
 
         value[0]=1 #bc for phi
         
-        if (x[0] <2):
-            temp1= (10.0 - 5)/(0.0-2) * (x[0]-2) + 5
-            temp2= -(10.0 - 5)/(0.0-2) * (x[0]-2) + 5
+        if (x[0] <0.2):
+            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
             
             if (x[1]>temp1):
                 value[1]=theta3
@@ -73,7 +75,7 @@ class InitialCondition(UserExpression):
                 value[1]=theta1
 
         else:
-            if (x[1]>5):
+            if (x[1]>0.5):
                 value[1]=theta3
             else:
                 value[1]=theta1
@@ -89,10 +91,10 @@ def boundary(x, on_boundary):
 class boundary_grains(UserExpression):
     def eval(self, value, x):
         
-        if (x[0] <2):
+        if (x[0] <0.2):
         
-            temp1= (10.0 - 5)/(0.0-2) * (x[0]-2) + 5
-            temp2= -(10.0 - 5)/(0.0-2) * (x[0]-2) + 5
+            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
         
             if (x[1]>temp1):
                 value[0]=theta3
@@ -104,7 +106,7 @@ class boundary_grains(UserExpression):
                 value[0]=theta1
         
         else:
-            if (x[1]>5):
+            if (x[1]>0.5):
                 value[0]=theta3
             else:
                 value[0]=theta1
@@ -112,7 +114,7 @@ class boundary_grains(UserExpression):
             value[0]=value[0]
 
     def value_shape(self):
-        return ()  #return scalr
+        return ()  #return scalar
 
 
 
@@ -146,9 +148,134 @@ t=0.
 dt=1e-3
 tend=dt * 3
 
+# Create progress bar, does not work with my fenics version
+# progress = Progress('Time-stepping')
+# set_log_level(PROGRESS)
 
 
+Energy_functional = .5*alpha2*dot(grad(phi),grad(phi))*dx+\
+    ffun(phi)*dx+s*gfun(phi)*p(grad(theta))*dx+\
+    .5*epsilon2*( dot(grad(theta),grad(theta) ) )*dx
 
+def vari_shape(dt):
+    return derivative(Energy_functional, u, du) \
+        +(b_phi/dt)*dphi*phi*dx -(b_phi/dt)*dphi*phi_n*dx \
+        +(b_theta(phi_n)/dt)*dot(dtheta,theta)*dx \
+        -(b_theta(phi_n)/dt)*dot(dtheta,theta_n)*dx
+
+
+F = vari_shape(dt)
+J  = derivative(F, u, utrial)
+problem = NonlinearVariationalProblem(F, u, bc, J)
+solver  = NonlinearVariationalSolver(problem)
+
+parameters['linear_algebra_backend'] = 'PETSc'
+prm = solver.parameters
+
+prm["newton_solver"]["linear_solver"] = "gmres"
+prm["newton_solver"]["krylov_solver"]["absolute_tolerance"] = 1E-14
+prm["newton_solver"]["krylov_solver"]["relative_tolerance"] = 1E-10
+prm["newton_solver"]["krylov_solver"]["maximum_iterations"] = 300
+prm["newton_solver"]["krylov_solver"]["monitor_convergence"] = True
+prm["newton_solver"]["krylov_solver"]["nonzero_initial_guess"] = True
+prm['newton_solver']['absolute_tolerance'] = 1E-9
+prm['newton_solver']['relative_tolerance'] = 5E-7
+prm['newton_solver']['maximum_iterations'] = 10
+prm['newton_solver']['relaxation_parameter'] = 1.
+
+
+# Create VTK files for visualization output
+vtkfile_phi= File('2D_KWC/phi.pvd')
+vtkfile_theta= File('2D_KWC/theta.pvd')
+
+
+u.assign(u_n)
+phiv,thetav =u.split()
+vtkfile_phi << (phiv,t)
+vtkfile_theta << (thetav,t)
+
+Energy_evol=[]
+tlist=[]
+tlist.append(0.)
+Energy_evol.append(assemble(Energy_functional))
+
+inc=0
+itertot=0
+cut=0
+
+while t<tend :
+    t+=dt
+    a=False
+    while(a == False):
+        try:
+            a=solver.solve()
+        except:
+            cut+=1
+            dt=dt/2.
+            print('No convergency, decrease dt',dt)
+
+            F = vari_shape(dt)
+            J  = derivative(F, u, utrial)
+            problem = NonlinearVariationalProblem(F, u, bc, J)
+            solver  = NonlinearVariationalSolver(problem)
+                    
+            prm = solver.parameters
+            prm["newton_solver"]["linear_solver"] = "gmres"
+            prm["newton_solver"]["krylov_solver"]["absolute_tolerance"] = 1E-14
+            prm["newton_solver"]["krylov_solver"]["relative_tolerance"] = 1E-10
+            prm["newton_solver"]["krylov_solver"]["maximum_iterations"] = 300
+            prm["newton_solver"]["krylov_solver"]["monitor_convergence"] = True
+            prm["newton_solver"]["krylov_solver"]["nonzero_initial_guess"] = True
+            prm['newton_solver']['absolute_tolerance'] = 1E-9
+            prm['newton_solver']['relative_tolerance'] = 5E-7
+            prm['newton_solver']['maximum_iterations'] = 10
+            prm['newton_solver']['relaxation_parameter'] = 1.
+
+            u.assign(u_n)
+            a=False
+
+    inc+=1
+    itertot+=a[0]
+    #    u_n2.assign(u_n)
+    u_n.assign(u)
+    dt_old=dt
+    tlist.append(t)
+    Energy_evol.append(assemble(Energy_functional))
+    
+    print('Converged with n=',a[0],t,t/tend,inc,itertot,dt)
+    
+    if( int(num_plot*(t/tend)) != int(num_plot*((t-dt)/tend))): # to store solution only
+        print('writting plot file')
+        phiv,thetav =u.split()
+        vtkfile_phi << (phiv,t)
+        vtkfile_theta << (thetav,t)
+    
+    if(a[0]<=3):
+        print('Increase dt')
+        dt=dt*2.
+        F = vari_shape(dt)
+        J  = derivative(F, u, utrial)
+        problem = NonlinearVariationalProblem(F, u, bc, J)
+        solver  = NonlinearVariationalSolver(problem)
+        
+        prm = solver.parameters
+        prm["newton_solver"]["linear_solver"] = "gmres"
+        prm["newton_solver"]["krylov_solver"]["absolute_tolerance"] = 1E-14
+        prm["newton_solver"]["krylov_solver"]["relative_tolerance"] = 1E-10
+        prm["newton_solver"]["krylov_solver"]["maximum_iterations"] = 300
+        prm["newton_solver"]["krylov_solver"]["monitor_convergence"] = True
+        prm["newton_solver"]["krylov_solver"]["nonzero_initial_guess"] = True
+        prm['newton_solver']['absolute_tolerance'] = 1E-9
+        prm['newton_solver']['relative_tolerance'] = 5E-7
+        prm['newton_solver']['maximum_iterations'] = 10
+        prm['newton_solver']['relaxation_parameter'] = 1.
+
+
+    plt.plot(tlist,Energy_evol)
+
+    print(inc)
+    print(itertot)
+    print(cut)
 
 
 
