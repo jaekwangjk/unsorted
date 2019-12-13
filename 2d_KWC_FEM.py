@@ -7,16 +7,13 @@ import math
 #I need to fix scaling: does it convergent to all orders of parameters?
 
 #Constants
-alpha2=0.00530
-epsilon2= 0.00021333
-epsilon = math.sqrt(epsilon2)
-s=0.0017
-e=0.0021
-gamma=250
-b_phi=1E3
-b_theta=1E3
-L=10.
-mu=1E-5
+the_eps= 0.03
+alpha2=1 * the_eps
+s=1
+epsilon2= 0.00021333 # viscosity # threshold scheme does not have this.
+b_phi=1 #mobility
+b_theta=1 # mobility
+mu=1E-5 # regularization parameter
 
 # f and g functions in KWC model
 
@@ -25,19 +22,16 @@ def b_theta(phi):
     return 1
 
 def ffun(phi):
-    return 0.5*(1/epsilon2)*(phi-1)*(phi-1)
+    return 0.5*(1/the_eps)*(phi-1)*(phi-1)
 
 def gfun(phi):
-    return -2.*(ln(1.02-phi)+phi)
-
+    return -1.*ln(1.02-phi)
 
 def p(gradu):
     return sqrt(dot(gradu,gradu)+mu*mu)
 
 def dp(gradu):
     return gradu/p(gradu)
-
-
 
 mesh = UnitSquareMesh.create( 80, 80, CellType.Type.quadrilateral)
 
@@ -50,11 +44,10 @@ q_degree = 6
 dx = dx(metadata={'quadrature_degree': q_degree})
 
 
-
 # Define Initial Condition boundary condition
-theta1=0.
-theta2=np.pi/6.
-theta3=np.pi/3.
+theta1=-np.pi/6.
+theta2=0.0/6.
+theta3=np.pi/6.
 
 class InitialCondition(UserExpression):
     def eval(self, value, x):
@@ -83,10 +76,8 @@ class InitialCondition(UserExpression):
     def value_shape(self):
         return (2,)
 
-
 def boundary(x, on_boundary):
     return on_boundary
-
 
 class boundary_grains(UserExpression):
     def eval(self, value, x):
@@ -116,8 +107,6 @@ class boundary_grains(UserExpression):
     def value_shape(self):
         return ()  #return scalar
 
-
-
 expression_un=InitialCondition(degree=2)
 expression_GB=boundary_grains(degree=2)
 
@@ -139,19 +128,14 @@ u_n = interpolate(expression_un,V)
 phi_n,theta_n = split(u_n)
 
 
-num_plot=2 # number of frames saved
+num_plot=50 # number of frames saved
 
 
 # Variational non-linear form, find u such F(u,w)=0
 # Note that implicit backward Euler is used for time integration
 t=0.
-dt=1e-3
-tend=dt * 3
-
-# Create progress bar, does not work with my fenics version
-# progress = Progress('Time-stepping')
-# set_log_level(PROGRESS)
-
+dt=1e-2
+tend=dt * 50
 
 Energy_functional = .5*alpha2*dot(grad(phi),grad(phi))*dx+\
     ffun(phi)*dx+s*gfun(phi)*p(grad(theta))*dx+\
@@ -162,7 +146,6 @@ def vari_shape(dt):
         +(b_phi/dt)*dphi*phi*dx -(b_phi/dt)*dphi*phi_n*dx \
         +(b_theta(phi_n)/dt)*dot(dtheta,theta)*dx \
         -(b_theta(phi_n)/dt)*dot(dtheta,theta_n)*dx
-
 
 F = vari_shape(dt)
 J  = derivative(F, u, utrial)
@@ -187,7 +170,6 @@ prm['newton_solver']['relaxation_parameter'] = 1.
 # Create VTK files for visualization output
 vtkfile_phi= File('2D_KWC/phi.pvd')
 vtkfile_theta= File('2D_KWC/theta.pvd')
-
 
 u.assign(u_n)
 phiv,thetav =u.split()
@@ -242,13 +224,15 @@ while t<tend :
     tlist.append(t)
     Energy_evol.append(assemble(Energy_functional))
     
-    print('Converged with n=',a[0],t,t/tend,inc,itertot,dt)
+    #print('Converged with n=',a[0],t,t/tend,inc,itertot,dt)
     
     if( int(num_plot*(t/tend)) != int(num_plot*((t-dt)/tend))): # to store solution only
         print('writting plot file')
         phiv,thetav =u.split()
         vtkfile_phi << (phiv,t)
         vtkfile_theta << (thetav,t)
+    
+    ## what does this part is doing?
     
     if(a[0]<=3):
         print('Increase dt')
@@ -270,119 +254,14 @@ while t<tend :
         prm['newton_solver']['maximum_iterations'] = 10
         prm['newton_solver']['relaxation_parameter'] = 1.
 
-
-    plt.plot(tlist,Energy_evol)
-
-    print(inc)
-    print(itertot)
-    print(cut)
+    #print(inc)
+    #print(itertot)
+    #print(cut)
 
 
+
+plt.plot(tlist,Energy_evol)
 
 print("Progam finished successfully")
 
 
-
-
-## Time intrementation
-'''
-print('first step')
-inc=0
-dt=.001*b_phi
-t=0
-#tend=1E6*dt
-tend=1
-inc=0.
-while t<tend:
-    F=  (b_phi/dt)*w1*phi*dx  \
-    + alpha2 * dot( grad(w1) , grad(phi) )*dx \
-    + w1*fprim(phi)*dx \
-    + s*w1*gprim(phi)*p(grad(theta))*dx \
-    + -(b_phi/dt)*w1*phi_n*dx  \
-    + (b_theta/dt)*w2*theta*dx \
-    + epsilon2*dot( grad(w2),grad(theta) )*dx \
-    + s*g(phi)*dot( dp(grad(theta)) , grad(w2) )*dx \
-    + -(b_theta/dt)*w2*theta_n*dx
-    inc=1
-    while (inc/100.) != int(inc/100): ##Do this until inc becomes a hundreds
-        inc+=1
-        t+=dt
-        solve(F==0,u,bc)
-        u_n.assign(u)
-        if( int(num_plot*(t/tend)) != int(num_plot*((t-dt)/tend))): # to store solution only
-            #print t
-            phi_v , theta_v=u.split()
-            ## Save solution to file (VTK)
-            vtkfile_phi << (phi_v,t)
-            vtkfile_theta << (theta_v, t)
-    #progress.update(t / tend)
-    dt=dt*10
-    print('new dt',dt)
-
-
-'''
-
-
-
-'''
-# Define funcions in the FE space
-w1,w2 = TestFunctions(V)
-u = Function(V) #solution field in t+dt
-u_n = Function(V) #solution field in t
-phi,theta= split(u) # Labels for the two coupled fields
-u_n = interpolate(bound,V) # Initial field value u(t=0)
-phi_n,theta_n = split(u_n)
-bc = DirichletBC(V, bound, boundary)  # BC for initial field
-
-# Define variational problem
-# Note that in F might enter python functions of u and expressions of x
-
-dt=.001*b_phi
-
-num_plot=100 # number of frames saved
-
-# This is to force a given integration rule, here the exact one is too large
-q_degree = 3
-dx = dx(metadata={'quadrature_degree': q_degree})
-#
-
-# Variational non-linear form, find u such F(u,w)=0
-# Note that implicit backward Euler is used for time integration
-F=  (b_phi/dt)*w1*phi*dx  \
-+ alpha2 * dot( grad(w1) , grad(phi) )*dx \
-+ w1*fprim(phi)*dx \
-+ s*w1*gprim(phi)*p(grad(theta))*dx \
-+ -(b_phi/dt)*w1*phi_n*dx  \
-+ (b_theta/dt)*w2*theta*dx \
-+ epsilon2*dot( grad(w2),grad(theta) )*dx
-#\ + s*g(phi)*dot( dp(grad(theta)) , grad(w2) )*dx \
-+ -(b_theta/dt)*w2*theta_n*dx
-
-##Full implicit
-
-# Create VTK files for visualization output
-vtkfile_phi= File('2D_KWC/phi.pvd')
-vtkfile_theta= File('2D_KWC/theta.pvd')
-
-
-
-
-
-
-'''
-'''
-    phi=sym.symbols('phi')
-    f=e*(phi-1)**2 # Symbolic f
-    fprim=sym.diff(f,phi) # Symbolic df/dphi
-    f_code=sym.printing.ccode(f) # Expression f
-    fprim=sym.lambdify(phi,fprim) # Python function df/dphi
-    
-    g=phi**2 # Symbolic g
-    
-    #g= -ln(1-phi)
-    gprim=sym.diff(g,phi) # Symbolic dg/dphi
-    g_code=sym.printing.ccode(g) # Expression g
-    gprim = sym.lambdify(phi,gprim)# Python function dg/dphi
-    g=sym.lambdify(phi,g)
-    
-'''
