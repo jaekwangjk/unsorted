@@ -10,10 +10,10 @@ import math
 the_eps= 0.03
 alpha2=1 * the_eps
 s=1
-epsilon2= 0.00021333 # viscosity # threshold scheme does not have this.
+epsilon2= 0.0021333 # viscosity # threshold scheme does not have this.
 b_phi=1 #mobility
 b_theta=1 # mobility
-mu=1E-5 # regularization parameter
+mu=1E-4 # regularization parameter
 
 # f and g functions in KWC model
 
@@ -45,18 +45,18 @@ dx = dx(metadata={'quadrature_degree': q_degree})
 
 
 # Define Initial Condition boundary condition
-theta1=-np.pi/6.
-theta2=0.0/6.
-theta3=np.pi/6.
+theta1=-np.pi*0/6.
+theta2=np.pi/6.
+theta3=2.0*np.pi/6.
 
 class InitialCondition(UserExpression):
     def eval(self, value, x):
 
         value[0]=1 #bc for phi
         
-        if (x[0] <0.2):
-            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
-            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+        if (x[0] <0.8):
+            temp1= (1.0 - 0.5)/(0.0-0.8) * (x[0]-0.8) + 0.5
+            temp2= -(1.0 - 0.5)/(0.0-0.8) * (x[0]-0.8) + 0.5
             
             if (x[1]>temp1):
                 value[1]=theta3
@@ -82,10 +82,10 @@ def boundary(x, on_boundary):
 class boundary_grains(UserExpression):
     def eval(self, value, x):
         
-        if (x[0] <0.2):
+        if (x[0] <0.8):
         
-            temp1= (1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
-            temp2= -(1.0 - 0.5)/(0.0-0.2) * (x[0]-0.2) + 0.5
+            temp1= (1.0 - 0.5)/(0.0-0.8) * (x[0]-0.8) + 0.5
+            temp2= -(1.0 - 0.5)/(0.0-0.8) * (x[0]-0.8) + 0.5
         
             if (x[1]>temp1):
                 value[0]=theta3
@@ -135,7 +135,7 @@ num_plot=50 # number of frames saved
 # Note that implicit backward Euler is used for time integration
 t=0.
 dt=1e-2
-tend=dt * 50
+tend=dt * 500
 
 Energy_functional = .5*alpha2*dot(grad(phi),grad(phi))*dx+\
     ffun(phi)*dx+s*gfun(phi)*p(grad(theta))*dx+\
