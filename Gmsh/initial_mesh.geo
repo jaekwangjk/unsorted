@@ -31,7 +31,7 @@ Line(12) = {7, 4}; Transfinite Curve {12} = 4 Using Progression 1;
 
 
 
-// Boundary Condition 
+// Boundary Condition : You don't need it  
 //Physical Curve("cylinder") = {7, 8, 5, 6};
 //Physical Curve("inlet") = {1};
 //Physical Curve("outlet") = {3};
@@ -42,9 +42,6 @@ Line(12) = {7, 4}; Transfinite Curve {12} = 4 Using Progression 1;
 
 Physical Line(0) = {1, 2, 3, 4};
 Physical Line(1) = {5, 8, 7, 6};
-
-
-
 
 
 
@@ -70,15 +67,7 @@ Transfinite Surface {4};
 
 
 
-
-
-//Recombine Surface {1}; 
-//Recombine Surface {2}; 
-//Recombine Surface {3}; 
-//Recombine Surface {4}; 
-
-
-// some parameters for the meshing:
+// some parameters for the meshing: deal.ii specific 
 Mesh.Algorithm = 8;
 Mesh.RecombineAll = 1;
 Mesh.CharacteristicLengthFactor = 0.09;
