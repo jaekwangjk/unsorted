@@ -17,6 +17,7 @@
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/grid_in.h>
+#include <deal.II/grid/grid_out.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_accessor.h>
@@ -38,6 +39,13 @@
 #include "headers/bc_and_rhs.h"
 
 const unsigned int max_cycle=1;
+
+//Mesh type info
+// 1: Rectangular
+// 2: One cylinder (Gmsh)
+// 3: ...
+
+int mesh_type = 0;
 
 namespace MyStokes
 {
@@ -67,13 +75,15 @@ namespace MyStokes
         
     private:
         
-        void read_mesh ();
-        void setup_dofs ();
+        void read_mesh (int mesh_type_num);
+        void setup_dofs (int mesh_type_num);
         void assemble_system ();
         void solve ();
         void output_results (const unsigned int refinement_cycle) const;
         void refine_mesh ();
         
+        void measure_pressure_profile_in_x (); //at the center line
+        void measure_velocity_profile_in_y (); //at the outlet
         
         const unsigned int   degree;
         
@@ -188,7 +198,7 @@ namespace MyStokes
     
     
     template <int dim>
-    void StokesProblem<dim>::setup_dofs ()
+    void StokesProblem<dim>::setup_dofs (int mesh_type_num)
     {
         A_preconditioner.reset ();
         system_matrix.clear ();
@@ -212,7 +222,7 @@ namespace MyStokes
             DoFTools::make_hanging_node_constraints (dof_handler,
                                                      constraints);
             
-            //boundary_id =1,3 side wall
+            //boundary_id =1,3 bottom and top wall
             
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       1,
@@ -226,20 +236,31 @@ namespace MyStokes
                                                       constraints,
                                                       fe.component_mask(velocities));
          
-            //in and out let - create 1-dimensional flow
+            
+            if(mesh_type_num == 1)
+            {
+                //boundary_id =12 :: Cylinder
+                VectorTools::interpolate_boundary_values (dof_handler,
+                                                      12,
+                                                      ZeroFunction<dim>(dim+1),
+                                                      constraints,
+                                                      fe.component_mask(velocities));
+            }
+            
+            //inlet(4) and outlet(2) -
+            /*
+            VectorTools::interpolate_boundary_values (dof_handler,
+                                                      4,
+                                                      ZeroFunction<dim>(dim+1),
+                                                      constraints,
+                                                      fe.component_mask(yvel));
             
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       2,
                                                       ZeroFunction<dim>(dim+1),
                                                       constraints,
-                                                      fe.component_mask(xvel));
-            
-            VectorTools::interpolate_boundary_values (dof_handler,
-                                                      4,
-                                                      ZeroFunction<dim>(dim+1),
-                                                      constraints,
-                                                      fe.component_mask(xvel));
-           
+                                                      fe.component_mask(yvel));
+           */
             
         }
         
@@ -327,19 +348,12 @@ namespace MyStokes
         
         const FEValuesExtractors::Vector velocities (0);
         const FEValuesExtractors::Scalar radialvel (0);
-        const FEValuesExtractors::Scalar zvel (0);
         const FEValuesExtractors::Scalar pressure (dim);
-        
         
         std::vector<SymmetricTensor<2,dim> > symgrad_phi_u (dofs_per_cell);
         std::vector<double>                  div_phi_u   (dofs_per_cell);
         std::vector<double>                  phi_p       (dofs_per_cell);
         std::vector<double>                  phi_ur      (dofs_per_cell);
-        std::vector<double>                  phi_uz      (dofs_per_cell);
-        
-        double                               r_point;
-        
-        double                               tester=0;
         
         typename DoFHandler<dim>::active_cell_iterator
         cell = dof_handler.begin_active(),
@@ -355,28 +369,25 @@ namespace MyStokes
             
             for (unsigned int q=0; q<n_q_points; ++q)
             {
-                r_point = fe_values.quadrature_point (q)[0]; // radial location
-                
+               
                 for (unsigned int k=0; k<dofs_per_cell; ++k)
                 {
                     symgrad_phi_u[k] = fe_values[velocities].symmetric_gradient (k, q);
                     div_phi_u[k]     = fe_values[velocities].divergence (k, q);
                     phi_p[k]         = fe_values[pressure].value (k, q);
-                    phi_ur[k]        = fe_values[radialvel].value (k, q);
                 }
                 
                 for (unsigned int i=0; i<dofs_per_cell; ++i)
                 {
                     for (unsigned int j=0; j<dofs_per_cell; ++j)
                     {
-                        local_matrix(i,j) +=  (2  * (symgrad_phi_u[i] * symgrad_phi_u[j])
+                        local_matrix(i,j) +=  (2.0  * (symgrad_phi_u[i] * symgrad_phi_u[j])
                                                - (div_phi_u[i]) * phi_p[j]
                                                - phi_p[i] * (div_phi_u[j])
                                                + phi_p[i] * phi_p[j]
                                                ) * fe_values.JxW(q);
                         
                     }
-                    
                     
                     const unsigned int component_i =
                     fe.system_to_component_index(i).first;
@@ -389,8 +400,9 @@ namespace MyStokes
             
             for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
             {
-                if (cell->face(face_no)->boundary_id()==2)
+                if (cell->face(face_no)->boundary_id()==4)//inlet
                 {
+                  
                     fe_face_values.reinit (cell, face_no);
                     
                     for (unsigned int q=0; q<n_face_q_points; ++q)
@@ -400,7 +412,7 @@ namespace MyStokes
                             const Tensor<1, dim> phi_i_u =
                             fe_face_values[velocities].value(i, q);
                         
-                            double pressure_in =2.0;
+                            double pressure_in =20.0;
                     
                             local_rhs(i) +=
                             -(phi_i_u * fe_face_values.normal_vector(q) *
@@ -409,7 +421,7 @@ namespace MyStokes
                     }
                 }
                 
-                if (cell->face(face_no)->boundary_id()==4)
+                if (cell->face(face_no)->boundary_id()==2)
                 {
                     fe_face_values.reinit (cell, face_no);
                     
@@ -430,8 +442,6 @@ namespace MyStokes
                 }
             }
             
-            
-            
             cell->get_dof_indices (local_dof_indices);
             constraints.distribute_local_to_global (local_matrix, local_rhs,
                                                     local_dof_indices,
@@ -444,10 +454,7 @@ namespace MyStokes
         = std_cxx11::shared_ptr<typename InnerPreconditioner<dim>::type>(new typename InnerPreconditioner<dim>::type());
         A_preconditioner->initialize (system_matrix.block(0,0),
                                       typename InnerPreconditioner<dim>::type::AdditionalData());
-        
     }
-    
-    
     
     template <int dim>
     void StokesProblem<dim>::solve ()
@@ -552,57 +559,76 @@ namespace MyStokes
     }
     
     template <int dim>
-    void StokesProblem<dim>::read_mesh ()
+    void StokesProblem<dim>::read_mesh (int mesh_type_num)
     {
-        std::vector< unsigned int > repetitions_a(2); //number of discretizatio
-        repetitions_a[0]=1;  //3;
-        repetitions_a[1]=1;   //2;
-        GridGenerator::subdivided_hyper_rectangle (triangulation, repetitions_a,
-                                                   Point<2>(0.0,0.0),
-                                                   Point<2>(1.0,10.0));
-     
-        triangulation.refine_global(3);
-        //To designate boundray condition--loop over all faces.
         
-        for (typename Triangulation<dim>::active_cell_iterator
-             cell=triangulation.begin_active();
-             cell!=triangulation.end(); ++cell)
+        if(mesh_type_num==0)
         {
-            for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
+            
+            double Lx=10;
+            double Ly=1;
+            std::vector< unsigned int > repetitions_a(2); //number of discretization
+            repetitions_a[0]=4;  //3;
+            repetitions_a[1]=1;   //2;
+            GridGenerator::subdivided_hyper_rectangle (triangulation, repetitions_a,
+                                                       Point<2>(0.0,0.0),
+                                                       Point<2>(Lx,Ly));
+            
+            triangulation.refine_global(3);
+            //To designate boundray condition--loop over all faces.
+            
+            for (typename Triangulation<dim>::active_cell_iterator
+                 cell=triangulation.begin_active();
+                 cell!=triangulation.end(); ++cell)
             {
-                
-                if (cell->face(f)->at_boundary() == true)
+                for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
                 {
                     
-                    static const double tol = 1e-12;
-               
-                    // Boundary faces
-                    if ( std::abs(cell->face(f)->center()[0]-0.0)< tol )
+                    if (cell->face(f)->at_boundary() == true)
                     {
-                        //side wall
-                        cell->face(f)->set_boundary_id(1);
-                        std::cout << "boundary 1 is created" << std::endl;
-                    }
-                    if ( std::abs(cell->face(f)->center()[1]-0.0)< tol )
-                    {
-                        //in-let
-                        cell->face(f)->set_boundary_id(2);
-                        std::cout << "boundary 2 is created" << std::endl;
-                    }
-                    if ( std::abs(cell->face(f)->center()[0]-1.0)< tol )
-                    {
-                        //side-wall
-                        cell->face(f)->set_boundary_id(3);
-                        std::cout << "boundary 3 is created" << std::endl;
-                    }
-                    if ( std::abs(cell->face(f)->center()[1]-10.0)< tol )
-                    {
-                        //outlet
-                        cell->face(f)->set_boundary_id(4);
-                        std::cout << "boundary 4 is created" << std::endl;
+                        
+                        static const double tol = 1e-12;
+                        
+                        // Boundary faces
+                        if ( std::abs(cell->face(f)->center()[0]-0.0)< tol )
+                        {
+                            //Inlet
+                            cell->face(f)->set_boundary_id(4);
+                           // std::cout << "boundary 4 is created" << std::endl;
+                        }
+                        if ( std::abs(cell->face(f)->center()[1]-0.0)< tol )
+                        {
+                            //Bottom wall
+                            cell->face(f)->set_boundary_id(1);
+                           // std::cout << "boundary 1 is created" << std::endl;
+                        }
+                        if ( std::abs(cell->face(f)->center()[0]-Lx)< tol )
+                        {
+                            //Outlet
+                            cell->face(f)->set_boundary_id(2);
+                           // std::cout << "boundary 2 is created" << std::endl;
+                        }
+                        if ( std::abs(cell->face(f)->center()[1]-Ly)< tol )
+                        {
+                            //Topwall
+                            cell->face(f)->set_boundary_id(3);
+                          //  std::cout << "boundary 3 is created" << std::endl;
+                        }
                     }
                 }
             }
+            
+            
+        }else if(mesh_type_num==1) //one cylinder
+        {
+            GridIn<dim> gridin;
+            gridin.attach_triangulation(triangulation);
+            std::ifstream f("one_cylinder.msh");
+            gridin.read_msh(f);
+        
+            const Point<2> center (2.5,2.5);
+            static const SphericalManifold<dim> manifold_description_1;
+            triangulation.set_manifold (12, manifold_description_1);
         }
         
     }
@@ -611,10 +637,17 @@ namespace MyStokes
     void StokesProblem<dim>::run ()
     {
         
-        read_mesh ();
+        read_mesh (mesh_type);
         // triangulation.refine_global(2);
+        // output_results (1);
         
-        
+        /*
+        std::ofstream out("grid-1.eps");
+        GridOut       grid_out;
+        grid_out.write_eps(triangulation, out);
+        std::cout << "Grid written to grid-1.eps" << std::endl;
+        */
+    
         for (unsigned int refinement_cycle = 0; refinement_cycle<max_cycle;
              ++refinement_cycle)
         {
@@ -625,7 +658,7 @@ namespace MyStokes
             //refine_mesh ();
             
             std::cout << "   setting up system..." << std::endl << std::flush;
-            setup_dofs ();
+            setup_dofs (mesh_type);
             
             std::cout << "   Assembling..." << std::endl << std::flush;
             assemble_system ();
@@ -637,10 +670,71 @@ namespace MyStokes
             output_results (refinement_cycle);
             
             std::cout << std::endl;
+            measure_velocity_profile_in_y ();
+            
+            
         }
+        
+    }
+    
+    
+    
+    template <int dim>
+    void StokesProblem<dim>::measure_velocity_profile_in_y ()
+    {
+    
+        const MappingQ<dim> mapping (degree);
+        QGauss<dim-1>   quadrature_formula_face(2*degree+1);
+        
+        FEFaceValues<dim> fe_face_values (mapping, fe, quadrature_formula_face,
+                                          update_JxW_values |
+                                          update_quadrature_points |
+                                          update_gradients |
+                                          update_values |
+                                          update_normal_vectors);
+        
+        const FEValuesExtractors::Scalar xvel (0);
+        
+        const unsigned int   faces_per_cell  = GeometryInfo<dim>::faces_per_cell;
+        const unsigned int   n_q_face_points = fe_face_values.n_quadrature_points;
+        
+        std::vector<double>  local_ux_values (n_q_face_points);
+        
+        typename DoFHandler<dim>::active_cell_iterator
+        cell = dof_handler.begin_active(),
+        endc = dof_handler.end();
+        for (; cell!=endc; ++cell)
+        {
+            for (unsigned int face_no=0; face_no<faces_per_cell; ++face_no)
+            {
+                if (cell->face(face_no)->boundary_id()==2) //outlet
+                {
+                    fe_face_values.reinit (cell, face_no);
+                    fe_face_values[xvel].get_function_values (solution, local_ux_values);
+                    
+                    for (unsigned int q=0; q<n_q_face_points; ++q)
+                    {
+                       double x_point = fe_face_values.quadrature_point (q)[0];
+                       double y_point = fe_face_values.quadrature_point (q)[1];
+                    
+                       double u_x = local_ux_values[q];
+                       
+                       std::cout << "(" << x_point<<","<<y_point<<"), u_x =" << u_x <<std::endl;
+                        
+                    }
+                    
+                    
+                }
+            }
+        }
+            
+        
+        
         
         
     }
+    
+    
 }
 
 
