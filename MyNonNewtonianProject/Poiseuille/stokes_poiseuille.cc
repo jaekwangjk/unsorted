@@ -6,8 +6,10 @@
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/block_sparse_matrix.h>
 #include <deal.II/lac/solver_cg.h>
+#include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/constraint_matrix.h>
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -35,10 +37,57 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
 #include "headers/bc_and_rhs.h"
 
 const unsigned int max_cycle=1;
+
+// ==========================================================
+class MooreThixotropy_Fluid
+{
+    
+public:
+    
+    double eta_str; // Solution Relaxation Time
+    double eta_infty; // Polymer Viscosity
+    double k_d; // Solvent Viscosity
+    double k_a; // Solution Retardation Time
+    
+    double lambda;
+    double viscosity;
+    
+    MooreThixotropy_Fluid() // default constructor
+    {
+        std::cout << "Moore Thixotropy Fluid is constructed" <<std::endl;
+        std::string varstr;
+        std::ifstream inputfile("fluid_prms.dat");
+        inputfile >> eta_str;       getline(inputfile,varstr);
+        inputfile >> eta_infty;       getline(inputfile,varstr);
+        inputfile >> k_d;       getline(inputfile,varstr);
+        inputfile >> k_a;       getline(inputfile,varstr);
+        std::cout
+        << "eta_str:         " << eta_str     << "\n"
+        << "eta_infty:         " << eta_infty    << "\n"
+        << "k_d:         " << k_d     << "\n"
+        << "k_a:         " << k_a     << "\n"
+        << std::endl;
+    }
+    
+    double compute_viscosity (double lambda);
+    
+};
+
+double MooreThixotropy_Fluid::compute_viscosity (double lambda)
+{
+    double visosity = lambda * eta_str + eta_infty;
+    
+    //regularization
+    if (viscosity < eta_infty)
+        viscosity = eta_infty;
+    
+    return viscosity;
+}
+
+MooreThixotropy_Fluid fluid;
 
 //Mesh type info
 // 1: Rectangular
@@ -78,7 +127,12 @@ namespace MyStokes
         void read_mesh (int mesh_type_num);
         void setup_dofs (int mesh_type_num);
         void assemble_system ();
-        void solve ();
+        void solve_flow ();
+        
+        void assemble_transport_system ();
+        void solve_transport (const unsigned int refinement_cycle);
+        //seems refinement_cycle is not needed , check later and delete
+        
         void output_results (const unsigned int refinement_cycle) const;
         void refine_mesh ();
         
@@ -89,22 +143,39 @@ namespace MyStokes
         
         Triangulation<dim>   triangulation;
         FESystem<dim>        fe;
-        
-        MappingQ<dim> mapping ;
-        
+        MappingQ<dim>        mapping;
         DoFHandler<dim>      dof_handler;
         ConstraintMatrix     constraints;
-        
         BlockSparsityPattern      sparsity_pattern;
         BlockSparseMatrix<double> system_matrix;
         
         BlockVector<double> solution;
         BlockVector<double> system_rhs;
+        BlockVector<double> previous_solution;
         
         std_cxx11::shared_ptr<typename InnerPreconditioner<dim>::type> A_preconditioner;
     };
     
+    /////// Structure Boundary Values...needed to be expelled
+    template <int dim>
+    class StructureBoundaryValues : public Function<dim>
+    {
+    public:
+        StructureBoundaryValues () : Function<dim>(1) {}
+        virtual double value (const Point<dim>   &p,
+                              const unsigned int  component = 0) const;
+    };
     
+    
+    template <int dim>
+    double
+    StructureBoundaryValues<dim>::value (const Point<dim> &p,
+                                         const unsigned int /*component */) const
+    {
+        double value = 1.0;
+        return value;
+    }
+    ////////
     
     template <class Matrix, class Preconditioner>
     class InverseMatrix : public Subscriptor
@@ -194,7 +265,6 @@ namespace MyStokes
     mapping (degree),
     dof_handler (triangulation)
     {}
-    
     
     
     template <int dim>
@@ -457,7 +527,7 @@ namespace MyStokes
     }
     
     template <int dim>
-    void StokesProblem<dim>::solve ()
+    void StokesProblem<dim>::solve_flow ()
     {
         const InverseMatrix<SparseMatrix<double>,
         typename InnerPreconditioner<dim>::type>
@@ -664,7 +734,7 @@ namespace MyStokes
             assemble_system ();
             
             std::cout << "   Solving..." << std::endl  << std::flush;
-            solve ();
+            solve_flow ();
             
             std::cout << "   Refinement..." << std::endl  << std::flush;
             output_results (refinement_cycle);
@@ -682,6 +752,11 @@ namespace MyStokes
     template <int dim>
     void StokesProblem<dim>::measure_velocity_profile_in_y ()
     {
+        
+        std::ostringstream filename;
+        filename << "velocity-profile.txt";
+        std::ofstream output (filename.str().c_str());
+       
     
         const MappingQ<dim> mapping (degree);
         QGauss<dim-1>   quadrature_formula_face(2*degree+1);
@@ -718,8 +793,10 @@ namespace MyStokes
                        double y_point = fe_face_values.quadrature_point (q)[1];
                     
                        double u_x = local_ux_values[q];
-                       
-                       std::cout << "(" << x_point<<","<<y_point<<"), u_x =" << u_x <<std::endl;
+                        
+                       //std::cout << "(" << x_point<<","<<y_point<<"), u_x =" << u_x <<std::endl;
+                        
+                       output << u_x << " " << y_point << std::endl;
                         
                     }
                     
@@ -729,7 +806,7 @@ namespace MyStokes
         }
             
         
-        
+         output.close();
         
         
     }
