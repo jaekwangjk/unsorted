@@ -61,7 +61,7 @@ double eta_0=1.0 ; //purely viscous
 
 double c = 0.1; //StreamLineDiffusion Coefficient
 
-unsigned int max_refinement_cycle=4;
+unsigned int max_refinement_cycle=5;
 
 
 namespace MyStokes
@@ -215,13 +215,11 @@ namespace MyStokes
                                                       fe.component_mask(velocities));
             
             //Sphere-2
-            /*
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       11,
                                                       ZeroFunction<dim>(dim+2),
                                                       constraints,
                                                       fe.component_mask(velocities));
-            */
             
         }
         
@@ -688,13 +686,13 @@ namespace MyStokes
         {
             GridRefinement::refine_and_coarsen_fixed_number (triangulation,
                                                              cellwise_shear_rate,
-                                                             0.3, 0.0);
+                                                             0.5, 0.0);
         }
         else if(refinement_cycle>2 && refinement_cycle<5)
         {
             GridRefinement::refine_and_coarsen_fixed_number (triangulation,
                                                              cellwise_shear_rate,
-                                                             0.4, 0.0);
+                                                            0.3, 0.0);
             set_anisotropic_flags();
         }
         else
@@ -741,8 +739,9 @@ namespace MyStokes
     StokesProblem<dim>::output_results (const unsigned int refinement_cycle)
     {
         //outputs solution
-        if ( refinement_cycle == max_refinement_cycle-1){
-    
+        //if ( refinement_cycle == max_refinement_cycle-1){
+        if ( refinement_cycle >0){
+            
         std::vector<std::string> solution_names (dim, "Velocity");
         solution_names.push_back ("Pressure");
         solution_names.push_back ("Structure");
@@ -766,7 +765,12 @@ namespace MyStokes
         data_out.build_patches ();
 
         std::ostringstream filenameeps;
-        filenameeps << "solution"<< ".vtk";
+        //filenameeps << "NNNNNNN"<< ".vtk";
+            
+        filenameeps << "solution-"
+        << Utilities::int_to_string (refinement_cycle, 3)
+        << ".vtk";
+        
         std::ofstream output (filenameeps.str().c_str());
         data_out.write_vtk (output);
         
@@ -938,14 +942,13 @@ namespace MyStokes
                         
                         pressure_drag_front += 2.* pi * r_point  * (normal[0]*local_pressure_values[q]) * fe_face_values.JxW (q) ;
                 
-                        viscous_drag_front += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0] +
-                                                            -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1]
+                        viscous_drag_front += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
+                             -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1]
                                                             )*fe_face_values.JxW (q);
                     }
                     
                 }else if(cell->face(face_no)->boundary_id()==11)
                 {
-                   /*
                     fe_face_values.reinit (cell, face_no);
                     fe_face_values[pressure].get_function_values (solution,local_pressure_values);
                     fe_face_values[velocities].get_function_symmetric_gradients (solution,local_sym_vel_gradient);
@@ -963,16 +966,17 @@ namespace MyStokes
                         
                         normal = fe_face_values.normal_vector (q);
                         
-                        std::cout <<"ID:11 normal (" << normal[0] << "," << normal[1] << ")" <<std::endl;
-                        
+                       
                         shear_rate = get_shear_rate(local_sym_vel_gradient[q], local_ur_values[q], r_point);
+                        
                         pressure_drag_back += 2.* pi * r_point  * (normal[0]*local_pressure_values[q]) * fe_face_values.JxW (q) ;
-                        viscous_drag_back += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0] +
+                        
+                        viscous_drag_back += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
                                                                   -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1]
                                                                   )*fe_face_values.JxW (q);
 
                     }
-                    */
+                
                 }
             
         }
@@ -1022,23 +1026,41 @@ namespace MyStokes
             GridIn<dim> grid_in;
             grid_in.attach_triangulation (triangulation);
             //std::ifstream input_file("two_sphere.msh");
-            std::ifstream input_file("one_half_sphere.msh");
+            std::ifstream input_file("two_sphere.msh");
             
             Assert (dim==2, ExcInternalError());
             grid_in.read_msh (input_file);
             
-            static const SphericalManifold<dim> manifold_description_1;
+            const double d=0.2;
+            const Point<2> center1 (-0.5*d,0);
+            const Point<2> center2 (0.5*d,0);
+            
+            //Front Sphere
+            static SphericalManifold<dim> manifold_description_1(center1);
+            static HyperShellBoundary<dim> boundary_1(center1);
+            
             triangulation.set_manifold (10, manifold_description_1);
+            triangulation.set_manifold (10, boundary_1);
+           
             
-            static const SphericalManifold<dim> manifold_description_2;
+            //Second Sphere
+            
+            static SphericalManifold<dim> manifold_description_2(center2);
+            static HyperShellBoundary<dim> boundary_2(center2);
+            
             triangulation.set_manifold (11, manifold_description_2);
+            triangulation.set_manifold (11, boundary_2);
             
-            static HyperShellBoundary<dim> boundary_1;
-            //triangulation.set_manifold (10, boundary_1);
-            static HyperShellBoundary<dim> boundary_2;
-            //triangulation.set_manifold (11, boundary_2);
             
-            triangulation.refine_global (1);
+            //exit(1);
+            
+            //static const SphericalManifold<dim> manifold_description_2;
+           
+           
+            
+            
+            
+            //triangulation.refine_global (1);
             //print_mesh_info (triangulation, "yourMesh.eps");
         }
         
@@ -1088,6 +1110,7 @@ namespace MyStokes
            post_processing (); //calculate cellwise-shear-rate
            compute_drag (refinement_cycle);
            output_results (refinement_cycle);
+          
            refine_mesh (refinement_cycle);
           
         }

@@ -1,5 +1,3 @@
-// Outer point
-
 a1=0.025; 
 a2=0.025;
 d=0.2; 
@@ -137,14 +135,15 @@ Transfinite Curve {27} = 4 Using Progression 1;
 Transfinite Curve {28} = 4 Using Progression 1;
 
 // Boundary Condition 
-//Physical Curve("cylinder") = {6,7,9,18,20,23};
+//Physical Curve("cylinderA") = {6,7,9,18,20,23};
 //Physical Curve("inlet") = {4};
 //Physical Curve("outlet") = {27};
 //Physical Curve("wall") = {3,12,16,22,28};
 //Physical Curve("axis") = {1,5,10,14,17,24,26};
 
 //Define boundary indicator in deal.II
-Physical Line(11) = {6,7,9,18,20,23};
+Physical Line(10) = {6,7,9};
+Physical Line(11) = {18,20,23};
 Physical Line(12) = {4};
 Physical Line(13) = {27};
 Physical Line(14) = {3,12,16,22,28};
@@ -173,4 +172,3 @@ Mesh.CharacteristicLengthFactor = 0.09;
 Mesh.SubdivisionAlgorithm = 1;
 Mesh.Smoothing = 20;
 Show "*";
-
