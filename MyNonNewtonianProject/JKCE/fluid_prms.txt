@@ -1,4 +1,4 @@
-2 %eta_str
-2 %eta_infty
+49 %eta_str
+1 %eta_infty
 1 %k_d
 0.1 %k_a

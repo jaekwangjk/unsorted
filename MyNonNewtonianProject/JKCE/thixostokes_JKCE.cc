@@ -408,7 +408,7 @@ namespace MyStokes
         
         const FEValuesExtractors::Vector velocities (0);
         const FEValuesExtractors::Scalar structure (dim+1);
-        const FEValuesExtractors::Scalar radialvel (0);
+        const FEValuesExtractors::Scalar radialvel (1);
         
         std::vector<double>                  structure_lambda      (dofs_per_cell);
         std::vector<Tensor<1,dim>>           structure_lambda_grad     (dofs_per_cell);
@@ -420,7 +420,6 @@ namespace MyStokes
         
         double r_point;
         double shear_rate;
-        
         
         typename DoFHandler<dim>::active_cell_iterator
         cell = dof_handler.begin_active(),
@@ -439,7 +438,9 @@ namespace MyStokes
             
             
             double h = cell -> diameter();
-            double delta = c  * pow(h,degree);  // pow(h,degree+1.5) may work more accurately, but I found that then the system is less likely solved to by GRES solver, (stabilization term decays too fast...)
+            double delta = c  * pow(h,degree);
+            // pow(h,degree+1.5) may work more accurately.
+            //I found that then the system is less likely solved to by GRES solver, (stabilization term decays too fast...)
             
             
             for (unsigned int q=0; q<n_q_points; ++q)
@@ -452,23 +453,20 @@ namespace MyStokes
                 
                 double vel_magnitude= std::sqrt(advection_field*advection_field);
                 
-                r_point = fe_values.quadrature_point (q)[0]; // radial location
+                r_point = fe_values.quadrature_point (q)[1]; // radial location
                 
                 shear_rate = get_shear_rate(local_symgrad_phi_u[q], local_phi_ur[q], r_point);
                 
                 for (unsigned int i=0; i<dofs_per_cell; ++i)
                 {
                     const double phi_i_s = fe_values[structure].value(i,q);
-                    
                     const Tensor<1,dim> grad_phi_i_s = fe_values[structure].gradient (i, q);
-                    
-                    
+        
                     for (unsigned int j=0; j<dofs_per_cell; ++j)
                     {
                         const double phi_j_s = fe_values[structure].value(j,q);
                         const Tensor<1,dim> grad_phi_j_s = fe_values[structure].gradient (j, q);
-                        
-
+                    
                         local_matrix(i,j) += (phi_i_s * ( advection_field * grad_phi_j_s  )
                                              + (k_d * shear_rate + k_a) *phi_i_s * phi_j_s
                                             
@@ -489,22 +487,18 @@ namespace MyStokes
             
             for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
             {
-                if (cell->face(face_no)->boundary_id()==3) // strongly designated  boundary condition for the sphere falling in tube
+                if (cell->face(face_no)->boundary_id()==12)
                 {
+                    fe_face_values.reinit (cell, face_no);
+                    fe_face_values.get_function_values (solution,solution_values_face);
                     
-                        fe_face_values.reinit (cell, face_no);
-                        fe_face_values.get_function_values (solution,solution_values_face); //advection field coming from flow solution
-                    
-                        structure_boundary_values.value_list (fe_face_values.get_quadrature_points(),face_boundary_values);
+                    structure_boundary_values.value_list (fe_face_values.get_quadrature_points(),face_boundary_values);
                     
                     for (unsigned int q=0; q<n_face_q_points; ++q)
                     {
                         r_point = fe_face_values.quadrature_point (q)[0]; // radial location
-                        
-                        double z_point = fe_face_values.quadrature_point (q)[1]; // vertical location
-                        
-                       
-                        Tensor<1,dim> present_u_face; // Present u at face
+        
+                        Tensor<1,dim> present_u_face;
                         
                         for (unsigned int d=0; d<dim; ++d)
                             present_u_face[d] = solution_values_face[q](d);
@@ -512,19 +506,17 @@ namespace MyStokes
                         if (fe_face_values.normal_vector(q) * present_u_face < 0){
                      
                             for (unsigned int i=0; i<dofs_per_cell; ++i)
-                                
                             {
-            
                                 const double phi_i_s = fe_face_values[structure].value(i,q);
                                 const Tensor<1,dim> grad_phi_i_s = fe_face_values[structure].gradient (i, q);
-                            
                                 
                                     for (unsigned int j=0; j<dofs_per_cell; ++j)
                                     {
                                     
-                                            const double phi_j_s = fe_face_values[structure].value(j,q);
-                                            const Tensor<1,dim> grad_phi_j_s = fe_face_values[structure].gradient (j, q);
-                                                        local_matrix(i,j) -= (present_u_face *
+                                      const double phi_j_s = fe_face_values[structure].value(j,q);
+                                        const Tensor<1,dim> grad_phi_j_s = fe_face_values[structure].gradient (j, q);
+                                        
+                                        local_matrix(i,j) -= (present_u_face *
                                                       fe_face_values.normal_vector(q) *
                                                       phi_i_s *
                                                       phi_j_s *
@@ -533,12 +525,12 @@ namespace MyStokes
                              
                                     } //close cycle j
                                 
-                                local_rhs(i) -= (present_u_face *
-                                                 fe_face_values.normal_vector(q) *
-                                                 face_boundary_values[q]         *
-                                                 phi_i_s *
-                                                 r_point *
-                                                 fe_face_values.JxW(q));
+                                        local_rhs(i) -= (present_u_face *
+                                                         fe_face_values.normal_vector(q) *
+                                                         face_boundary_values[q]         *
+                                                         phi_i_s *
+                                                         r_point *
+                                                         fe_face_values.JxW(q));
                                 
                                 
                             } //close cycle i
@@ -714,7 +706,7 @@ namespace MyStokes
     {
         //outputs solution
         //if ( refinement_cycle == max_refinement_cycle-1){
-        if ( refinement_cycle >0){
+        if ( refinement_cycle >=0){
             
         std::vector<std::string> solution_names (dim, "Velocity");
         solution_names.push_back ("Pressure");
@@ -949,6 +941,9 @@ namespace MyStokes
         std::cout << std::fixed << std::setprecision(10) <<
         "   Front Drag=" << total_drag_front << " " << "    Back Drag=" << total_drag_back << std::endl;
       
+        Drag_front = total_drag_front;
+        Drag_back = total_drag_back;
+        
         const double a = 0.025;
         const double Drat = a/0.1; //H of mesh
         const double K1 = 1./(+1.
@@ -963,7 +958,7 @@ namespace MyStokes
        const double drag_exact = K1* 6.*pi*a*U_inflow * (eta_infty+eta_str);
         
        std::cout << std::fixed << std::setprecision(10) <<
-        "Newtonain Exact=" << drag_exact <<  std::endl;
+        "   Newtonain (Full Structure) Exact=" << drag_exact <<  std::endl;
         
     }
     
@@ -1019,7 +1014,7 @@ namespace MyStokes
             
             assemble_system ();
             solve_flow ();
-            /*
+            
             assemble_transport_system ();
             solve_transport (refinement_cycle);
             
@@ -1046,11 +1041,10 @@ namespace MyStokes
             }while (difference.l2_norm()> 5* pow(10,-5)* dof_handler.n_dofs());  //defines iteration tolerance
             
             
-           */
+           
            post_processing (); //calculate cellwise-shear-rate
            compute_drag (refinement_cycle);
            output_results (refinement_cycle);
-          
            refine_mesh (refinement_cycle);
           
         }
@@ -1089,9 +1083,19 @@ int main ()
         << "k_a:         " << k_a     << "\n"
         << std::endl;
         
-        U_inflow=10.0;
+        inputfile.close();
+        
+        std::ofstream outputfile("U_D1_D2.txt");
+        
+        
+        U_inflow=0.05;
         StokesProblem<2> flow_problem1(1);
         flow_problem1.run ();
+        
+        outputfile << U_inflow <<" "<< Drag_front <<" "<< Drag_back << std::endl; 
+        
+        outputfile.close();
+        
         
     }
     catch (std::exception &exc)
