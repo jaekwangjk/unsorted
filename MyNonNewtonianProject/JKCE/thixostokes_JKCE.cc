@@ -6,7 +6,7 @@
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/block_sparse_matrix.h>
 #include <deal.II/lac/solver_cg.h>
-#include <deal.II/lac/solver_gmres.h> //Matrix solver for transport equation, unsymmetric matrix
+#include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/constraint_matrix.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
@@ -38,7 +38,6 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
 #include <deal.II/numerics/derivative_approximation.h>
 
 #include "headers/post_processor.h"
@@ -53,15 +52,28 @@ double Drag_back;
 
 
 //Model Parameter
-double k_d = 0.5; //destruction
-double k_a = 1.0; //reconstruction
-double eta_lambda= 2.0; //depends on stress
-double eta_0=1.0 ; //purely viscous
+
+double c=0.1; //StreamLineDiffusion Coefficient
 
 
-double c = 0.1; //StreamLineDiffusion Coefficient
 
-unsigned int max_refinement_cycle=5;
+double k_d; //destruction
+double k_a; //reconstruction
+double eta_str; //depends on stress
+double eta_infty; //purely viscous
+
+unsigned int max_refinement_cycle=1;
+
+//Moore Viscosity Model
+double viscosity_lambda (const double lambda, const double eta_infty, const double eta_str)
+{
+    double eta = eta_infty + eta_str * lambda;
+    
+    if (eta<eta_infty)
+    {    eta=eta_infty;}
+    
+    return eta;
+}
 
 
 namespace MyStokes
@@ -86,13 +98,15 @@ namespace MyStokes
     
         void refine_mesh (const unsigned int refinement_cycle);
         void set_anisotropic_flags ();
-        void compute_drag (const unsigned int refinement_cycle); // not written yet
+        
+        void compute_drag (const unsigned int refinement_cycle);
         void output_results (const unsigned int refinement_cycle);
+        void post_processing ();
+        
         const unsigned int   degree;
         
         double get_shear_rate (const SymmetricTensor<2,dim> symgrad_u, const double ur, const double r_point);
         
-        void post_processing ();
         Vector<double> cellwise_shear_rate;
         Vector<double> cellwise_stress_field;
         Vector<double> cellwise_viscosity;
@@ -115,19 +129,6 @@ namespace MyStokes
     };
     
     
-
-    double viscosity_lambda (const double lambda, const double eta_0, const double eta_lambda)
-    {
-        double eta = eta_0 + eta_lambda * lambda;
-        
-        if (eta<eta_0)
-            eta=eta_0;
-    
-        return eta;
-    }
-    
- 
-    
     template <int dim>
     StokesProblem<dim>::StokesProblem (const unsigned int degree)
     :
@@ -141,7 +142,8 @@ namespace MyStokes
     
     
     template<int dim>
-    double StokesProblem<dim>::get_shear_rate(const SymmetricTensor<2,dim> symgrad_u, const double ur, const double r_point)
+    double StokesProblem<dim>::get_shear_rate(const SymmetricTensor<2,dim> symgrad_u,
+                                              const double ur, const double r_point)
     {
         return std::sqrt( 2.*(symgrad_u*symgrad_u + ur*ur/(r_point*r_point) ) );
     }
@@ -155,79 +157,64 @@ namespace MyStokes
         system_matrix.clear ();
         dof_handler.distribute_dofs (fe);
         DoFRenumbering::Cuthill_McKee (dof_handler);
-        
-        std::vector<unsigned int> block_component (dim+2,0);   // dim+1 int components, initialized with 0
+        std::vector<unsigned int> block_component (dim+2,0);
         block_component[dim] = 1;
-        block_component[dim+1] = 2; //Block for structure variable...
-        
+        block_component[dim+1] = 2;
         DoFRenumbering::component_wise (dof_handler, block_component);
-        
         std::vector<types::global_dof_index> dofs_per_block (3);
         DoFTools::count_dofs_per_block (dof_handler, dofs_per_block, block_component);
-
         const unsigned int n_u = dofs_per_block[0], n_p = dofs_per_block[1], n_s=dofs_per_block[2];
         
         std::cout << "   -n_u: " << n_u << "   -n_p: " << n_p <<"   -n_s: " << n_s << std::endl;
         
-        
         {
             constraints.clear ();
-            
             FEValuesExtractors::Vector velocities(0);
             FEValuesExtractors::Scalar radialvel(1);
-            
             DoFTools::make_hanging_node_constraints (dof_handler,
                                                      constraints);
-        
             //axis
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       15,
                                                       ZeroFunction<dim>(dim+2),
                                                       constraints,
                                                       fe.component_mask(radialvel));
-          
             //inlet and outlet
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       12,
-                                                      ConstantUx<dim>(U_inflow),  // Boundary Condition for the case sphere falling in tube
+                                                      ConstantUx<dim>(U_inflow),
                                                       constraints,
                                                       fe.component_mask(velocities));
-            
             //inlet and outlet
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       13,
-                                                      ConstantUx<dim>(U_inflow),  // Boundary Condition for the case sphere falling in tube
+                                                      ConstantUx<dim>(U_inflow),
                                                       constraints,
                                                       fe.component_mask(velocities));
-            
             //wall
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       14,
                                                       ConstantUx<dim>(U_inflow),
                                                       constraints,
                                                       fe.component_mask(velocities));
-    
-            //Sphere-1
+            //sphere-1 (Front)
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       10,
                                                       ZeroFunction<dim>(dim+2),
                                                       constraints,
                                                       fe.component_mask(velocities));
             
-            //Sphere-2
+            //sphere-2 (Back)
             VectorTools::interpolate_boundary_values (dof_handler,
                                                       11,
                                                       ZeroFunction<dim>(dim+2),
                                                       constraints,
                                                       fe.component_mask(velocities));
-            
         }
-        
         constraints.close ();
         
         {
             BlockDynamicSparsityPattern dsp (3,3);
-            
             dsp.block(0,0).reinit (n_u, n_u);
             dsp.block(1,0).reinit (n_p, n_u);
             dsp.block(2,0).reinit (n_s, n_u);
@@ -237,24 +224,22 @@ namespace MyStokes
             dsp.block(0,2).reinit (n_u, n_s);
             dsp.block(1,2).reinit (n_p, n_s);
             dsp.block(2,2).reinit (n_s, n_s);
-            
             dsp.collect_sizes();
-            
             DoFTools::make_sparsity_pattern (dof_handler, dsp, constraints, true);
             sparsity_pattern.copy_from (dsp);
-            sparsity_pattern.compress(); // what does this do? meaningful?
+            sparsity_pattern.compress();
         }
         
-        
         system_matrix.reinit (sparsity_pattern);
-        
         solution.reinit (3);
         solution.block(0).reinit (n_u);
         solution.block(1).reinit (n_p);
-        solution.block(2).reinit (n_s);
+        
+        //Init with full structure
+        solution.block(2).reinit (n_s); solution.block(2)=1.0;
+        
         solution.collect_sizes ();
         
-      
         system_rhs.reinit (3);
         system_rhs.block(0).reinit (n_u);
         system_rhs.block(1).reinit (n_p);
@@ -289,16 +274,14 @@ namespace MyStokes
                                  update_JxW_values |
                                  update_gradients);
         
-        const unsigned int   dofs_per_cell   = fe.dofs_per_cell;
-        const unsigned int   n_q_points      = quadrature_formula.size();
+        const unsigned int dofs_per_cell = fe.dofs_per_cell;
+        const unsigned int n_q_points = quadrature_formula.size();
         
-        FullMatrix<double>   local_matrix (dofs_per_cell, dofs_per_cell);
-        Vector<double>       local_rhs (dofs_per_cell);
-        
+        FullMatrix<double> local_matrix (dofs_per_cell, dofs_per_cell);
+        Vector<double> local_rhs (dofs_per_cell);
         std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
-        
-        const RightHandSide<dim>          right_hand_side;
-        std::vector<Vector<double> >      rhs_values (n_q_points,
+        const RightHandSide<dim> right_hand_side;
+        std::vector<Vector<double>> rhs_values (n_q_points,
                                                       Vector<double>(dim+2));
         
         const FEValuesExtractors::Vector velocities (0);
@@ -306,15 +289,11 @@ namespace MyStokes
         const FEValuesExtractors::Scalar pressure (dim);
         const FEValuesExtractors::Scalar structure (dim+1);
         
-        std::vector<SymmetricTensor<2,dim> > symgrad_phi_u (dofs_per_cell);
-        std::vector<double>                  div_phi_u   (dofs_per_cell);
-        std::vector<double>                  phi_p       (dofs_per_cell);
-        std::vector<double>                  phi_ur      (dofs_per_cell);
-        
-        std::vector<double>                  local_previous_solution_structure (n_q_points);  //local lambda value
-        
-        double                               r_point;
-        double                               lambda;
+        std::vector<SymmetricTensor<2,dim>> symgrad_phi_u (dofs_per_cell);
+        std::vector<double> div_phi_u(dofs_per_cell);
+        std::vector<double> phi_p(dofs_per_cell);
+        std::vector<double> phi_ur(dofs_per_cell);
+        std::vector<double> local_previous_solution_structure (n_q_points);
         
         typename DoFHandler<dim>::active_cell_iterator
         cell = dof_handler.begin_active(),
@@ -324,22 +303,16 @@ namespace MyStokes
             fe_values.reinit (cell);
             local_matrix = 0;
             local_rhs = 0;
-            
-            right_hand_side.vector_value_list(fe_values.get_quadrature_points(),
-                                              rhs_values);
+            right_hand_side.vector_value_list(fe_values.get_quadrature_points(),rhs_values);
             fe_values[structure].get_function_values (previous_solution, local_previous_solution_structure);
             
             for (unsigned int q=0; q<n_q_points; ++q)
             {
-                
-                r_point = fe_values.quadrature_point (q)[1]; // radial location
-             
+    
+                double r_point = fe_values.quadrature_point (q)[1];
                 double structure = local_previous_solution_structure[q];
-                
-                double viscosity = viscosity_lambda (structure, eta_0, eta_lambda);
+                double viscosity = viscosity_lambda (structure, eta_infty, eta_str);
              
-                //std::cout <<"viscosity: " << viscosity <<std::endl;
-                
                 for (unsigned int k=0; k<dofs_per_cell; ++k)
                 {
                     symgrad_phi_u[k] = fe_values[velocities].symmetric_gradient (k, q);
@@ -356,38 +329,39 @@ namespace MyStokes
                                               + 2 * viscosity * phi_ur[i] * phi_ur[j] / r_point
                                               - (r_point * div_phi_u[i] + phi_ur[i]) * phi_p[j]
                                               - phi_p[i] * (r_point * div_phi_u[j] + phi_ur[j])
-                                              + r_point * phi_p[i] * phi_p[j]
-                                              )
-                        * fe_values.JxW(q);
-                        
+                                              + r_point * phi_p[i] * phi_p[j])
+                                              * fe_values.JxW(q);
                     }
+                
+                    const unsigned int component_i = fe.system_to_component_index(i).first;
                     
-                    
-                    const unsigned int component_i =
-                    fe.system_to_component_index(i).first;
-                    local_rhs(i) += fe_values.shape_value(i,q) *
-                    rhs_values[q](component_i) * r_point *
-                    fe_values.JxW(q);
+                    local_rhs(i) += fe_values.shape_value(i,q)
+                                    * rhs_values[q](component_i)
+                                    * r_point
+                                    * fe_values.JxW(q);
+                   
                 }
             }
             
             for (unsigned int i=0; i<dofs_per_cell; ++i)
+            {
                 for (unsigned int j=i+1; j<dofs_per_cell; ++j)
-                    local_matrix(i,j) = local_matrix(j,i);
-            
+                {
+                   local_matrix(i,j) = local_matrix(j,i);
+            }}
+
             cell->get_dof_indices (local_dof_indices);
             
             constraints.distribute_local_to_global (local_matrix, local_rhs,
                                                     local_dof_indices,
                                                     system_matrix, system_rhs);
-            
-            
         }
         
         std::map<types::global_dof_index,double> boundary_values;
         
         A_preconditioner
         = std_cxx11::shared_ptr<typename InnerPreconditioner<dim>::type>(new typename InnerPreconditioner<dim>::type());
+        
         A_preconditioner->initialize (system_matrix.block(0,0),
                                       typename InnerPreconditioner<dim>::type::AdditionalData());
         
@@ -868,23 +842,17 @@ namespace MyStokes
     void
     StokesProblem<dim>::compute_drag (const unsigned int refinement_cycle)
     {
-        std::cout << "compute drag" << std::endl;
+        std::cout << "Compute drag" << std::endl;
         
         const long double pi = 3.141592653589793238462643;
         
         const MappingQ<dim> mapping (degree);
-        
-        double x_point;
-        double r_point;
-        
-        double theta_wise_pressure_drag;
-        double theta_wise_viscous_drag;
-        
+     
         double viscous_drag_front=0.0; double viscous_drag_back=0.0;
         double pressure_drag_front=0.0; double pressure_drag_back=0.0;
         double total_drag_front=0.0; double total_drag_back=0.0;
         
-        QGauss<dim-1>   quadrature_formula_face(2*degree+1); //check whether this is enough
+        QGauss<dim-1>   quadrature_formula_face(2*degree+1);
         
         FEFaceValues<dim> fe_face_values (mapping, fe, quadrature_formula_face,
                                           update_JxW_values |
@@ -901,53 +869,49 @@ namespace MyStokes
         const unsigned int   faces_per_cell  = GeometryInfo<dim>::faces_per_cell;
         const unsigned int   n_q_face_points = fe_face_values.n_quadrature_points;
         
-        std::vector<double>                  local_pressure_values (n_q_face_points);
-        std::vector<double>                  local_ur_values (n_q_face_points);
-        std::vector<double>                  local_structure_values (n_q_face_points);
+        std::vector<double> local_pressure_values (n_q_face_points);
+        std::vector<double> local_ur_values (n_q_face_points);
+        std::vector<double> local_structure_values (n_q_face_points);
         
-        std::vector<SymmetricTensor<2,dim>>  local_sym_vel_gradient (n_q_face_points);
-        Tensor<1,dim>                        normal;
+        std::vector<SymmetricTensor<2,dim>> local_sym_vel_gradient (n_q_face_points);
+        Tensor<1,dim> normal;
         
-        double lambda_s; double viscosity; double shear_rate;
+        //double lambda_s; double viscosity; double shear_rate;
     
         typename DoFHandler<dim>::active_cell_iterator
         cell = dof_handler.begin_active(),
         endc = dof_handler.end();
         for (; cell!=endc; ++cell)
         {
-            
             for (unsigned int face_no=0; face_no<faces_per_cell; ++face_no)
             {
                 if (cell->face(face_no)->boundary_id()==10)
                 {
-                    
                     fe_face_values.reinit (cell, face_no);
                     fe_face_values[pressure].get_function_values (solution,local_pressure_values);
                     fe_face_values[velocities].get_function_symmetric_gradients (solution,local_sym_vel_gradient);
                     fe_face_values[radialvel].get_function_values (solution, local_ur_values);
                     fe_face_values[structure].get_function_values (solution, local_structure_values);
-                   
 
                     for (unsigned int q=0; q<n_q_face_points; ++q)
                     {
-                        lambda_s = local_structure_values [q];
-                        viscosity = viscosity_lambda (lambda_s, eta_0, eta_lambda);
-                        
-                        x_point = fe_face_values.quadrature_point (q)[0];
-                        r_point = fe_face_values.quadrature_point (q)[1];
+                        double lambda_s = local_structure_values [q];
+                        double viscosity = viscosity_lambda (lambda_s, eta_infty, eta_str);
+                        double r_point = fe_face_values.quadrature_point (q)[1];
                     
                         normal = fe_face_values.normal_vector (q);
                         
-                        shear_rate = get_shear_rate(local_sym_vel_gradient[q], local_ur_values[q], r_point);
-                        
-                        pressure_drag_front += 2.* pi * r_point  * (normal[0]*local_pressure_values[q]) * fe_face_values.JxW (q) ;
+                        pressure_drag_front += 2.*pi*r_point
+                                               * (normal[0]*local_pressure_values[q])
+                                               * fe_face_values.JxW (q) ;
                 
-                        viscous_drag_front += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
-                             -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1]
-                                                            )*fe_face_values.JxW (q);
+                        viscous_drag_front += 2.* pi * r_point
+                                             * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
+                                                -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1])
+                                             * fe_face_values.JxW (q);
                     }
-                    
-                }else if(cell->face(face_no)->boundary_id()==11)
+                }//end of boundary id 10
+                else if(cell->face(face_no)->boundary_id()==11)
                 {
                     fe_face_values.reinit (cell, face_no);
                     fe_face_values[pressure].get_function_values (solution,local_pressure_values);
@@ -958,26 +922,22 @@ namespace MyStokes
                     
                     for (unsigned int q=0; q<n_q_face_points; ++q)
                     {
-                        lambda_s = local_structure_values [q];
-                        viscosity = viscosity_lambda (lambda_s, eta_0, eta_lambda);
-                        
-                        x_point = fe_face_values.quadrature_point (q)[0];
-                        r_point = fe_face_values.quadrature_point (q)[1];
+                        double lambda_s = local_structure_values [q];
+                        double viscosity = viscosity_lambda (lambda_s, eta_infty, eta_str);
+                        double r_point = fe_face_values.quadrature_point (q)[1];
                         
                         normal = fe_face_values.normal_vector (q);
                         
-                       
-                        shear_rate = get_shear_rate(local_sym_vel_gradient[q], local_ur_values[q], r_point);
+                        pressure_drag_back += 2.* pi * r_point
+                                              * (normal[0]*local_pressure_values[q])
+                                              * fe_face_values.JxW (q);
                         
-                        pressure_drag_back += 2.* pi * r_point  * (normal[0]*local_pressure_values[q]) * fe_face_values.JxW (q) ;
-                        
-                        viscous_drag_back += 2.* pi * r_point * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
-                                                                  -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1]
-                                                                  )*fe_face_values.JxW (q);
-
+                        viscous_drag_back += 2.* pi * r_point
+                                            * (-2.*viscosity*normal[0]*local_sym_vel_gradient[q][0][0]
+                                               -2.*viscosity*normal[1]*local_sym_vel_gradient[q][0][1])
+                                            * fe_face_values.JxW (q);
                     }
-                
-                }
+                }//end of boundary id 11
             
         }
         
@@ -986,16 +946,9 @@ namespace MyStokes
         total_drag_front= pressure_drag_front + viscous_drag_front;
         total_drag_back= pressure_drag_back + viscous_drag_back;
         
-        
         std::cout << std::fixed << std::setprecision(10) <<
         "   Front Drag=" << total_drag_front << " " << "    Back Drag=" << total_drag_back << std::endl;
       
-        //G_drag_force_total=total_drag;
-        //G_drag_force_pressure=pressure_drag;
-        //G_drag_froce_viscous=viscous_drag;
-        
-        //Check- Default Code
-        
         const double a = 0.025;
         const double Drat = a/0.1; //H of mesh
         const double K1 = 1./(+1.
@@ -1007,7 +960,7 @@ namespace MyStokes
                               -4.19   *pow(Drat,10)
                               );
         
-       const double drag_exact = K1* 6.*pi*a*U_inflow;
+       const double drag_exact = K1* 6.*pi*a*U_inflow * (eta_infty+eta_str);
         
        std::cout << std::fixed << std::setprecision(10) <<
         "Newtonain Exact=" << drag_exact <<  std::endl;
@@ -1022,10 +975,8 @@ namespace MyStokes
         {   //Read Mesh
             std::vector<unsigned int> subdivisions (dim, 1);
             subdivisions[0] = 4;
-            
             GridIn<dim> grid_in;
             grid_in.attach_triangulation (triangulation);
-            //std::ifstream input_file("two_sphere.msh");
             std::ifstream input_file("two_sphere.msh");
             
             Assert (dim==2, ExcInternalError());
@@ -1044,23 +995,12 @@ namespace MyStokes
            
             
             //Second Sphere
-            
             static SphericalManifold<dim> manifold_description_2(center2);
             static HyperShellBoundary<dim> boundary_2(center2);
             
             triangulation.set_manifold (11, manifold_description_2);
             triangulation.set_manifold (11, boundary_2);
             
-            
-            //exit(1);
-            
-            //static const SphericalManifold<dim> manifold_description_2;
-           
-           
-            
-            
-            
-            //triangulation.refine_global (1);
             //print_mesh_info (triangulation, "yourMesh.eps");
         }
         
@@ -1071,10 +1011,10 @@ namespace MyStokes
             
             setup_dofs ();
             
-            if (refinement_cycle == 0 )  //initialize previous solution at first cycle
+            //At first cycle: initialize previous solution
+            if (refinement_cycle == 0 )
             {
                 previous_solution = solution;
-                previous_solution = 0.;
             }
             
             assemble_system ();
@@ -1122,37 +1062,7 @@ namespace MyStokes
     template <int dim>
     void StokesProblem<dim>::second_run ()
     {
-        previous_str = solution.block(2);
-        
-        setup_dofs ();
-        assemble_system ();
-        solve_flow ();
-        assemble_transport_system ();
-        solve_transport (max_refinement_cycle);
-        
-        BlockVector<double> difference;
-        int iteration_number=0 ;
-        
-        previous_solution =solution ;
-        
-        do{
-            iteration_number +=1;
-            
-            assemble_system ();
-            solve_flow ();
-            assemble_transport_system ();
-            solve_transport (max_refinement_cycle);
-            
-            difference = solution;
-            difference -= previous_solution;
-            previous_solution=solution;
-            
-            std::cout << "   Iteration Number showing : " << iteration_number << "     Difference Norm : " << difference.l2_norm() << std::endl << std::flush;
-            
-        }while (difference.l2_norm()> 5* pow(10,-5)* dof_handler.n_dofs());  //defines iteration tolerance
-
-         compute_drag (max_refinement_cycle-1);
-         output_results (max_refinement_cycle-1);
+       //Not written yet
     }
 }
 
@@ -1163,6 +1073,22 @@ int main ()
         using namespace dealii;
         using namespace MyStokes;
     
+        std::string varstr;
+        
+        std::ifstream inputfile("fluid_prms.txt");
+    
+        inputfile >> eta_str;       getline(inputfile,varstr);
+        inputfile >> eta_infty;       getline(inputfile,varstr);
+        inputfile >> k_d;       getline(inputfile,varstr);
+        inputfile >> k_a;       getline(inputfile,varstr);
+      
+        std::cout
+        << "eta_str:         " << eta_str     << "\n"
+        << "eta_infty:         " << eta_infty     << "\n"
+        << "k_d:         " << k_d     << "\n"
+        << "k_a:         " << k_a     << "\n"
+        << std::endl;
+        
         U_inflow=10.0;
         StokesProblem<2> flow_problem1(1);
         flow_problem1.run ();
