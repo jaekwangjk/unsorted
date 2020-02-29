@@ -1,0 +1,11 @@
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/rebuild_cache.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/edit_cache.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/info.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/distclean.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/runclean.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/run.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/release.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/sign.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/debug.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/strip_comments.dir
+/Users/jaekwangkim/codes/unsorted/MyNonNewtonianProject/Poiseuille/CMakeFiles/stokes_poiseuille.dir

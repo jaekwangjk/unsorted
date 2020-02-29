@@ -46,6 +46,10 @@
 
 int mesh_type = 0;
 
+double InletPressure;
+double QflowRate;
+
+
 const unsigned int max_cycle=1;
 double c = 0.1; //Stabilization constant
 
@@ -120,6 +124,7 @@ namespace MyStokes
     public:
         StokesProblem (const unsigned int degree);
         void run ();
+        void second_run (int case_counter);
         
     private:
         
@@ -135,7 +140,7 @@ namespace MyStokes
         void refine_mesh ();
         
         void measure_pressure_profile_in_x (); //at the center line
-        void measure_velocity_profile_in_y (); //at the outlet
+        void measure_outlet (); //at the outlet
         
         const unsigned int   degree;
         
@@ -358,8 +363,16 @@ namespace MyStokes
         << dof_handler.n_dofs()
         << " (" << n_u << '+' << n_p << '+'<<n_s <<')'
         << std::endl;
+    
+        // previoius solution initialization
+        previous_solution = solution;
+        previous_solution = 0.;
+    
+        for(unsigned int i=n_u+n_p; i < n_u+n_p+n_s; i++)
+        {    previous_solution[i]=1.0; }
         
         std::cout << "   -set_up_dof; end" <<std::endl;
+        
     }
     
     
@@ -429,7 +442,11 @@ namespace MyStokes
             {
                
                 double lambda = local_previous_solution_structure[q];
+                
+                
+                //double viscosity = fluid.eta_str + fluid.eta_infty;
                 double viscosity = fluid.compute_viscosity(lambda);
+                
                 
                 for (unsigned int k=0; k<dofs_per_cell; ++k)
                 {
@@ -472,7 +489,7 @@ namespace MyStokes
                             const Tensor<1, dim> phi_i_u =
                             fe_face_values[velocities].value(i, q);
                         
-                            double pressure_in =20.0;
+                            double pressure_in =InletPressure;
                     
                             local_rhs(i) +=
                             -(phi_i_u * fe_face_values.normal_vector(q) *
@@ -790,7 +807,7 @@ namespace MyStokes
         if(mesh_type_num==0)
         {
             
-            double Lx=10;
+            double Lx=5;
             double Ly=1;
             std::vector< unsigned int > repetitions_a(2); //number of discretization
             repetitions_a[0]=4;  //3;
@@ -798,8 +815,7 @@ namespace MyStokes
             GridGenerator::subdivided_hyper_rectangle (triangulation, repetitions_a,
                                                        Point<2>(0.0,0.0),
                                                        Point<2>(Lx,Ly));
-            
-            triangulation.refine_global(3);
+            triangulation.refine_global(2);
             //To designate boundray condition--loop over all faces.
             
             for (typename Triangulation<dim>::active_cell_iterator
@@ -866,12 +882,9 @@ namespace MyStokes
         triangulation.refine_global(2);
         setup_dofs (mesh_type);
         
-        // previoius solution initialization
-        previous_solution = solution;
-        previous_solution = 0.;
-        
         assemble_stokes_system ();
         solve_flow ();
+    
         assemble_transport_system ();
         solve_transport ();
        
@@ -895,31 +908,21 @@ namespace MyStokes
             
         }while (difference.l2_norm()> 5* pow(10,-5)* dof_handler.n_dofs());  //defines iteration tolerance
 
-        output_results (1);
+        output_results (0);
         
-        // triangulation.refine_global(2);
-        // output_results (1);
-        
-    
-        /*
-        for (unsigned int refinement_cycle = 0; refinement_cycle<max_cycle;
-             ++refinement_cycle)
-        {
-        }
-         */
-        
+        measure_outlet ();
     }
     
     
     
     template <int dim>
-    void StokesProblem<dim>::measure_velocity_profile_in_y ()
+    void StokesProblem<dim>::measure_outlet ()
     {
-        
+        /*
         std::ostringstream filename;
         filename << "velocity-profile.txt";
         std::ofstream output (filename.str().c_str());
-       
+        */
     
         const MappingQ<dim> mapping (degree);
         QGauss<dim-1>   quadrature_formula_face(2*degree+1);
@@ -932,11 +935,15 @@ namespace MyStokes
                                           update_normal_vectors);
         
         const FEValuesExtractors::Scalar xvel (0);
+        const FEValuesExtractors::Vector velocities (0);
         
         const unsigned int   faces_per_cell  = GeometryInfo<dim>::faces_per_cell;
         const unsigned int   n_q_face_points = fe_face_values.n_quadrature_points;
         
         std::vector<double>  local_ux_values (n_q_face_points);
+        std::vector<Vector<double> > solution_values_face(n_q_face_points, Vector<double>(dim+2));
+        
+        QflowRate=0;
         
         typename DoFHandler<dim>::active_cell_iterator
         cell = dof_handler.begin_active(),
@@ -950,22 +957,72 @@ namespace MyStokes
                     fe_face_values.reinit (cell, face_no);
                     fe_face_values[xvel].get_function_values (solution, local_ux_values);
                     
+                    fe_face_values.get_function_values (solution,solution_values_face);
+                    //advection field coming from flow solution
+                    
                     for (unsigned int q=0; q<n_q_face_points; ++q)
                     {
+                        
+                        Tensor<1,dim> present_u_face; // Present u at face
+                        
+                        for (unsigned int d=0; d<dim; ++d)
+                            present_u_face[d] = solution_values_face[q](d);
+                        
                        double x_point = fe_face_values.quadrature_point (q)[0];
                        double y_point = fe_face_values.quadrature_point (q)[1];
                        double u_x = local_ux_values[q];
+                        
                        //std::cout << "(" << x_point<<","<<y_point<<"), u_x =" << u_x <<std::endl;
-                       output << u_x << " " << y_point << std::endl;
+                       //output << u_x << " " << y_point << std::endl;
+                        
+                       QflowRate += fe_face_values.normal_vector(q) * present_u_face
+                                    * fe_face_values.JxW (q);
+                        
                     }
                 }
             }
         }
             
+        std::cout << "   FLOW RATE: " << QflowRate << std::endl;
+         //output.close();
         
-         output.close();
         
+    }
+    
+    
+    template <int dim>
+    void StokesProblem<dim>::second_run (int case_counter)
+    {
+        setup_dofs (mesh_type);
+        assemble_stokes_system ();
+        solve_flow ();
         
+        assemble_transport_system ();
+        solve_transport ();
+        
+        BlockVector<double> difference;
+        int iteration_number=0 ;
+        previous_solution =solution ;
+        
+        do{
+            iteration_number +=1;
+            
+            assemble_stokes_system ();
+            solve_flow ();
+            assemble_transport_system ();
+            solve_transport ();
+            
+            difference = solution;
+            difference -= previous_solution;
+            previous_solution=solution;
+            
+            std::cout << "   Iteration Number showing : " << iteration_number << "     Difference Norm : " << difference.l2_norm() << std::endl << std::flush;
+            
+        }while (difference.l2_norm()> 5* pow(10,-5)* dof_handler.n_dofs());  //defines iteration tolerance
+        
+        output_results (case_counter);
+        
+        measure_outlet ();
     }
     
     
@@ -979,8 +1036,28 @@ int main ()
         using namespace dealii;
         using namespace MyStokes;
         
+
+        std::ostringstream filename;
+        filename << "PQ_curve.txt";
+        std::ofstream output (filename.str().c_str());
+        
+        InletPressure = 0.1;
+        
         StokesProblem<2> flow_problem(2);
         flow_problem.run ();
+        output << InletPressure  << " " << QflowRate << std::endl;
+        
+        for(unsigned int i=0; i<10; i++)
+        {
+            InletPressure*=1.5;
+            flow_problem.second_run (i+1);
+            
+            output << InletPressure  << " " << QflowRate << std::endl;
+            
+        }
+        
+        output.close();
+        
     }
     catch (std::exception &exc)
     {
