@@ -1,4 +1,5 @@
 *.vtk
 *.vtu
 *.pvd
+*.cmake
 
