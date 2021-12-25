@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from mshr import *
 
 '''
-DE = lambda * V / a 
+DE = lambda * V / a, or Wi
 a=1
 '''
 
