@@ -1,15 +1,6 @@
-function [families,famgrains] = Module_TECH_grains2families2dmobility(grains,R,dims,display)
+function [families,famgrains] = Module_TECH_grains2families2dmobility(grains,R,dims)
 
 % Note that this code can easily include the single kernel code. 
-
-if nargin < 4
-    display = 1;
-end
-
-if display
-    start_progress(' - Grouping families...');
-end
-
 
 global WORKSPACE;
 global work_x work_y work_bx work_by work_candidate_x work_candidate_y;
@@ -93,9 +84,7 @@ while N>sum(remaininggrains>0) % Loop over families.
     
     %added 
     families{label,4} = collect_cval2(1:collected);
-    
     famgrains{label} = listofgrains;
-    display_progress(sum(remaininggrains>0),N,1);
 end % (for label). Loop over families ends.
 
 families = families(1:maxlabel,1:4);
