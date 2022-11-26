@@ -1,4 +1,4 @@
-function Module_DataProcess_savegrainsfigure_withLabel(grains,dims,id,fileNumber)
+function Module_DataProcess_savegrainsfigure_withLabel(grains,dims,id,fileName, fileNumber)
 
 
 Ng = size(grains,1); % Number of grains.
@@ -44,7 +44,7 @@ ax_height = outerpos(4) - ti(2) - ti(4);
 ax.Position = [left bottom ax_width ax_height];
 formatSpec='%03d'; 
 
-FnameString = append('grainFigureIso',num2str(fileNumber, formatSpec)) ; 
+FnameString = append(fileName,num2str(fileNumber, formatSpec)) ; 
 print(fig,FnameString,'-dpng','-r0')
 
 close(fig); 

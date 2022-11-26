@@ -1,4 +1,4 @@
-function [grains,ori] = initialvoronoidata2d(N,dims,Rgrains,th_ang)
+function [grains,ori] = initialvoronoidata2d(N,dims,Rgrains,th_ang,rn)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % [grains,ori] = initialvoronoidata2d(N,dims,Rgrains,th_ang)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -6,7 +6,7 @@ function [grains,ori] = initialvoronoidata2d(N,dims,Rgrains,th_ang)
 % Grains with misorientation angle smaller than th_ang degrees are merged.
 % Each grain will have several disconnected components.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-rng(1); 
+rng(rn); 
 label = -1e10 * ones(dims); % very large value initially 
 m = dims(1); n = dims(2);
 W = int32(-ones(dims));

@@ -93,7 +93,7 @@ namespace MyStokes
         void setup_dofs ();
         void assemble_system ();
         void solve_flow ();
-        void solve_transport (const unsigned int refinement_cycle);
+        void solve_transport ();
         void assemble_transport_system ();
     
         void refine_mesh (const unsigned int refinement_cycle);
@@ -608,7 +608,7 @@ namespace MyStokes
     
     
     template <int dim>
-    void StokesProblem<dim>::solve_transport (const unsigned int refinement_cycle)
+    void StokesProblem<dim>::solve_transport ()
     {
         std::cout << "   -solve transport begins"<< std::endl;
         SolverControl           solver_control (std::pow(10,6), system_rhs.block(2).l2_norm() * pow(10,-3));
@@ -1016,7 +1016,7 @@ namespace MyStokes
             solve_flow ();
             
             assemble_transport_system ();
-            solve_transport (refinement_cycle);
+            solve_transport ();
             
             BlockVector<double> difference;
             int iteration_number=0 ;
@@ -1030,7 +1030,7 @@ namespace MyStokes
                 assemble_system ();
                 solve_flow ();
                 assemble_transport_system ();
-                solve_transport (refinement_cycle);
+                solve_transport ();
                 
                 difference = solution;
                 difference -= previous_solution;
@@ -1056,7 +1056,43 @@ namespace MyStokes
     template <int dim>
     void StokesProblem<dim>::second_run ()
     {
-       //Not written yet
+        std::cout<< "   second run with new set of Paramter" << std::endl;
+        
+        setup_dofs();
+        previous_solution = solution;
+        
+        assemble_system ();
+        solve_flow ();
+        
+        assemble_transport_system ();
+        solve_transport ();
+        
+        BlockVector<double> difference;
+        int iteration_number=0 ;
+        
+        previous_solution =solution ;
+        
+        do{
+            iteration_number +=1;
+            
+            
+            assemble_system ();
+            solve_flow ();
+            assemble_transport_system ();
+            solve_transport ();
+            
+            difference = solution;
+            difference -= previous_solution;
+            previous_solution=solution;
+            
+            std::cout << "   Iteration Number showing : " << iteration_number << "     Difference Norm : " << difference.l2_norm() << std::endl << std::flush;
+            
+        }while (difference.l2_norm()> 5* pow(10,-5)* dof_handler.n_dofs());  //defines iteration tolerance
+        
+        post_processing (); //calculate cellwise-shear-rate
+        compute_drag (max_refinement_cycle);
+        
+        
     }
 }
 
@@ -1092,7 +1128,17 @@ int main ()
         StokesProblem<2> flow_problem1(1);
         flow_problem1.run ();
         
-        outputfile << U_inflow <<" "<< Drag_front <<" "<< Drag_back << std::endl; 
+        outputfile << U_inflow <<" "<< Drag_front <<" "<< Drag_back << std::endl;
+        
+        for(int i=0; i<4; i++)
+        {
+            U_inflow=U_inflow * 1.1;
+            flow_problem1.second_run ();
+            outputfile << U_inflow <<" "<< Drag_front <<" "<< Drag_back << std::endl;
+            
+        }
+        
+        
         
         outputfile.close();
         

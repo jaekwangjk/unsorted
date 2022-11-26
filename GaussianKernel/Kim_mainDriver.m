@@ -6,11 +6,14 @@ addpath(genpath(pwd)) % add all subfolders to the path
 %% Hyper parameters 
 N=5000; % may be number of grain 
 dims=[2048 2048]; % dimensions of grid 
+
+%N=200;
+%dims=[500 500]; 
 Rgrains = 10; % number of pixel to outgrow 
 Rfamilies = 30; % minimum pixel distance to have two grains in same family 
 
 th_ang_for_merge = 0.001; % th_ang = Threshold angle to merge grains.
-angBrandon= 30; 
+angBrandon= 30; % not necessarily needed.....the value is not used all to be honest... 
 %% Prepare workspaces used globally 
 
 global KERNEL Z WORKSPACE;
@@ -35,32 +38,42 @@ work_candidate_y = int32(zeros(prod(dims),1));
 
 %% Initialization
 
-rng(1); % fix random % does not work...
+rn=2; % random number assigned for voronoi tessellation 
 
-[grains,ori] = Module_INIT_initialvoronoidata2d(N,dims,Rgrains,th_ang_for_merge);
+[grains,ori] = Module_INIT_initialvoronoidata2d(N,dims,Rgrains,th_ang_for_merge,rn);
 ID = (1:1:size(grains,1))';
 pauseTime = 0.5;
 % Module_DataProcess_showgrains_withLabel(grains,dims,ID,pauseTime); 
 
 
-%% save grain and load grain into a 'mat'file
-% filename = './grain_init_list';
-% save(filename,'-v7.3')
-% a = load('grain_list.mat').grains
-%save_variable(filename,grains,['grains_t',num2str(epoch),'_new']);
+%% save initial grain and load grain into a 'mat'file
+% filename = './TestGrain';
+% save(filename,'grains','dims','-v7.3')
 
 
 %% Time marching
-for t = 1:100 % Main time iteration starts.
+
+fileName1 = './png/polycrystal_';
+for t = 1:301% Main time iteration starts.
+%for t = 1:2% Main time iteration starts.
     
-    a=1;
+    status = append(int2str(t),' Time step is running');
+    disp(status); 
+    
     %Module_DataProcess_showgrains_withLabel(grains,dims,ID,pauseTime); 
-    Module_DataProcess_savegrainsfigure_withLabel(grains,dims,ID,t); 
+    %Module_DataProcess_savegrainsfigure_withLabelRGB(grains,dims,ID,fileName1,t); 
     
     display=0;
     [families,famgrains] = Module_TECH_grains2families2doriginal(grains,Rfamilies,dims,display); 
     Nf = size(families,1); % Number of families.
     
+    % %% save grain and load grain into a 'mat'file
+    if(t>299  && mod(t,30)==0)
+    %if(t==1)
+    filename = './grain_later_Poly_confi2_';
+    filename = append(filename,int2str(t)); 
+    save(filename,'grains','dims','-v7.3')
+    end 
     
     % Convolving families     
     for k=1:Nf % Loop over families.
@@ -81,8 +94,13 @@ for t = 1:100 % Main time iteration starts.
     
     % REDISTRIBUTION STEP:
     presence = CModule_get_nhd_grains2doriginal(grains,dims(1)*dims(2));
-    updatelevelsetdata2dToy(presence,grains,ID,ori,angBrandon);
     
+    % Change the function here!
+    %updatelevelsetdata2dToyTest2(presence,grains,ID,ori,angBrandon);
+    %updatelevelsetdata2dIsotropic(presence,grains,ID,ori,angBrandon);
+    updatelevelsetdata2dPolyCrystal(presence,grains,ID,ori,angBrandon);
+    
+    % do not use this. This is a nasty fucntion 
     %[grains,ID] = removeemptygrainsoriginal(grains,ID);
     
     
@@ -116,8 +134,4 @@ for t = 1:100 % Main time iteration starts.
     
 
 end
-
-%% save grain and load grain into a 'mat'file
-filename = './grain_later_iso';
-save(filename,'-v7.3')
 

@@ -107,6 +107,48 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 double surfacetension(int id1, int id2)
 {
-  double st = 0.5; 
-  return st;
+  int id1Type, id2Type; 
+  
+  // id1%3 =0 - type A 
+  // id2%3 =1 - type B
+  // id1%3 =2 - type C
+  
+  if(id1%3==0)
+    id1Type=0; 
+  else if( id1%3==1)
+    id1Type=1; 
+  else
+    id1Type=2; 
+   
+  if(id2%3==0)
+    id2Type=0; 
+  else if(id2%3==1)
+    id2Type=1; 
+  else
+    id2Type=2; 
+  
+  double st; 
+  double gamma1=1.0; 
+  double gamma2=1.1;
+  double gamma3=1.3; 
+  
+  if(id1Type==id2Type)
+      st = gamma1; 
+  else if (id1Type== 2 || id2Type==2)
+      st = gamma2; 
+  else 
+      st = gamma3; 
+  
+  // code need to be checked here....
+  // add some random energy...
+  // it is only need to function of id1 and id2 
+  int randomID = id1 - id2; 
+  if (randomID < 0.0)
+	  randomID = (-1) * randomID; 
+  
+  // IF there are more a way more than 5000 grain, then I just truncate discrete energy by 100..
+  randomID = randomID % 100; 
+  double randomEnergy = randomID * 0.0003;
+ 
+  return st + randomEnergy;
 }

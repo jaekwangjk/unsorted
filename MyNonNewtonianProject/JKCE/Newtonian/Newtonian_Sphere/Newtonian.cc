@@ -560,7 +560,7 @@ namespace MyStokes
 
     std::ostringstream filename;
     filename << "solution-"
-             << Utilities::int_to_string (refinement_cycle, 2)
+             << Utilities::int_to_string (refinement_cycle, 3)
              << ".vtk";
 
     std::ofstream output (filename.str().c_str());
