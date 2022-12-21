@@ -1,4 +1,4 @@
-function [families,famgrains] = Module_TECH_grains2families2doriginal(grains,R,dims,display)
+function [families,famgrains] = Module_TECH_grains2families2doriginal(grains,R,dims)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % [families,famgrains] = grains2families2doriginal(grains,R,dims,display)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -13,14 +13,6 @@ function [families,famgrains] = Module_TECH_grains2families2doriginal(grains,R,d
 %   display = 1 (default) Set to 0 to not display progress.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-if nargin < 4
-    display = 1;
-end
-
-if display
-    start_progress(' - Grouping families...');
-end
 
 global WORKSPACE;
 global work_x work_y work_bx work_by work_candidate_x work_candidate_y;
@@ -102,9 +94,7 @@ while N>sum(remaininggrains>0) % Loop over families.
     families{label,3} = collect_cval(1:collected);
     
     famgrains{label} = listofgrains;
-    if display
-        display_progress(sum(remaininggrains>0),N,1);
-    end
+    
 end % (for label). Loop over families ends.
 
 families = families(1:maxlabel,1:4);
