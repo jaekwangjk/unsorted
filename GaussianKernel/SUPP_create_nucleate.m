@@ -138,14 +138,15 @@ end
 % fileName1 = 'nucleate_';
 % Module_DataProcess_savegrainsfigure_withLabelRGB_ori(grains,dims,ID,newOri,fileName1,0);
 
-% % filename='./InitialCondition/init_grain_nucleate_1';  
-% % save(filename,'grains','dims','-v7.3')
-% % 
-% % 
-% % filename='./InitialCondition/ori_case_d_1';  
-% % save(filename,'ori','dims','-v7.3')
-% % 
-% % 
-% % filename='./InitialCondition/nucleated_case_d_1';  
-% % save(filename,'nucleated','dims','-v7.3')
+filename='./InitialCondition/grain_case_d_rn1';  
+save(filename,'grains','dims','-v7.3')
+
+
+ori=newOri;
+filename='./InitialCondition/ori_case_d_rn1';  
+save(filename,'ori','dims','-v7.3')
+
+
+filename='./InitialCondition/nucinfo_case_d_rn1';  
+save(filename,'nucleated','dims','-v7.3')
 
