@@ -1,5 +1,5 @@
-Lumache
-=======
+VENV
+=====
+To activate the corresponding virtual environment, use the following command 
 
-**Lumache** (/lu'make/) is a Python library for cooks and food lovers that
-creates recipes mixing random ingredients.
+source .venv/bin/activate
