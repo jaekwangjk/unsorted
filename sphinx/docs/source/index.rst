@@ -28,7 +28,7 @@ it simulats the microstructure...
    :maxdepth: 2
    :caption: Contents:
 
-Check out the :doc:`background` section for further information.
+Check out the :doc:`overview` section for further information.
 
 
 Test Data

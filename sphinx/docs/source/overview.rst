@@ -14,7 +14,7 @@ For example, they need to be compiled These programs are called MEX functions.
    mex pgrow3.c
 
 
-.. automodule:: src
+.. automodule:: statisticsGBM
 .. autofunction:: times_two
 
 
