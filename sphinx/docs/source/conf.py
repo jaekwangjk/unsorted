@@ -15,7 +15,7 @@ import os
 
 # -- Project information -----------------------------------------------------
 
-project = 'GBThresholding'
+project = 'statsticsGBM '
 copyright = '2023, Jaekwang Kim'
 author = 'Jaekwang Kim'
 
@@ -27,17 +27,20 @@ release = '1.0'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinxcontrib.matlab', 'sphinx.ext.autodoc'
+extensions = ['sphinxcontrib.matlab', 'sphinx.ext.autodoc',
+'sphinx.ext.mathjax',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.imgmath', 
+    'sphinx.ext.todo'
 ]
 
+
 this_dir = os.path.dirname(os.path.abspath(__file__))
-matlab_src_dir = os.path.abspath(os.path.join(this_dir, '../../'))
 
-primary_domain = 'mat'
-
-
+#matlab_src_dir = os.path.abspath(os.path.join(this_dir, '../../'))
+matlab_src_dir = os.path.abspath(os.path.join(this_dir, '../../statisticsGBM/'))
 
 templates_path = ['_templates']
 exclude_patterns = []
-html_theme = 'classic'
+html_theme = 'sphinx_book_theme'
 html_static_path = ['_static']

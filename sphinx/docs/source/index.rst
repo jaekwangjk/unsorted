@@ -6,35 +6,25 @@
 Documentation of statisticsGBM
 ======================================================
 
-The purpose of this page is to provide a user-manual for **statisticsGBM**, 
-a code for for simulating the motion of grain boundaries using the threshold-dynamics. 
-The original source files for are publisehd in the `statsticsGBM <https://github.com/tiagosalvador/statisticsGBM>`_, 
-together with the paper "The Role of Surface Tension and Mobility Model in Simulations of Grain Growth (2019)", 
-written by *Tiago Salvador and Selim Esedoglu*. 
+**statisticsGBM** is a *MATLAB*-based *threshold-dynamics* code for simulating the motion of grain boundaries during
+grain growth.   
+The original code was first published in `statsticsGBM <https://github.com/tiagosalvador/statisticsGBM>`_ 
+together with `Ref[1] <https://arxiv.org/abs/1907.11574>`_, written by *Tiago Salvador and Selim Esedoglu* in 2019.  
+The algorithm is a recent modification of threshold-dynamics of `Ref[2] <https://doi.org/10.1002/cpa.21527>`_
+that allows anisotropic grain boundary mobilities without significant complications in algorithm. 
   
-in this document we will discuss an edited version for subsequent study on (xx).  
-While Original source files are published in `here <https://github.com/tiagosalvador/statisticsGBM>`_ . 
-is a library for simulating the motion of grain boundaries 
-using the threshold-dynamics.
-Refereced from (X) and the original code, 
-it simulats the microstructure...
-
-.. note::
-   The code consists of ... both C+ and Matlab source files      
+In this document, we discuss its modified version that is used for the subsequent study on influence on grain
+boundary character anisotropy and grain statistics. 
+The document is structured as follow.  
 
 .. toctree::
    overview
    background
+   generalModule
+   extensionModule
+   examples
    :maxdepth: 2
    :caption: Contents:
 
-Check out the :doc:`overview` section for further information.
+Start with :doc:`overview` for general introduction on of the source files and documentation. 
 
-
-Test Data
-=========
-Do these work?
-
-
-
-.. This is acomments autofunction::test_data.times_two
