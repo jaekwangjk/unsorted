@@ -1,0 +1,3 @@
+Compile as follow 
+g++ -c -std=c++11 cell.cpp -I../../
+g++ -c -std=c++11 fmcell.cpp -I../../

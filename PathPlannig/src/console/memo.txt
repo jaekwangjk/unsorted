@@ -1,0 +1,2 @@
+Compile as follow 
+g++ -c console.cpp -I../../
