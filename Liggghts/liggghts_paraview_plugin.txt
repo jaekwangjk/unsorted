@@ -1,0 +1,10 @@
+[SuperQuadric 입자 형상 보이기]
+
+1. https://github.com/schrummy14/ParaView_Reader_for_LIGGGHTS  이 사이트에서 Superquadric_Visualiser_v2.0.zip 파일 다운로드
+
+2. 압축 해제 하고 적당한 장소에 파일들 배치 (영어 폴더 명 추천)
+
+3. paraview - Tools - Manage Plugins - Load New 에서 압축 해제한 파일 중 xml 파일 등록
+ (내 경우 custom/vtk 옵션이 사용가능함으로, VTK.xml 사용)
+
+4. liggghts vtk 파일 불러온뒤 filter 에서 liggghts 검색하면 나오는 필터 적용하면 끝
