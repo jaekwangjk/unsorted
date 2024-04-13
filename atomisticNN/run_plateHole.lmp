@@ -1,0 +1,30 @@
+# Initialization
+units metal                  # Sets units to metal (Angstroms, eV, ps, ...)
+atom_style atomic            # Defines atomic style
+boundary p p p               # Periodic boundary conditions in all directions
+
+# Atom Definition
+read_data plateHole_for_lammps.txt  # Reads the data file
+
+# Interatomic Potential
+pair_style eam/alloy         # Assumes an EAM/alloy potential, adjust as needed
+pair_coeff * * Cu_Zhou04.eam.alloy Cu  # Assumes copper, adjust filename and types as needed
+
+
+# Output before Minimization
+dump initialDump all atom 1 pre_minimization.dump  # Dump initial configuration
+run 0                                                    # Perform a zero-step run to trigger the dump
+undump initialDump     
+
+# Energy Minimization Settings
+min_style cg                 # Uses conjugate gradient method for minimization
+minimize 1e-25 1e-25 5000 10000   # Minimization parameters: tol, force tol, max iterations, max evals
+
+# Output
+thermo 100                   # Output thermo info every 100 steps
+dump 1 all atom 100 minimized_atoms.dump  # Dump configuration every 100 steps
+
+# Post-Minimization (optional)
+# You can add additional commands here to continue with dynamics, analysis, etc.
+
+print "Energy minimization completed."
