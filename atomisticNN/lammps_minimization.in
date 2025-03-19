@@ -1,0 +1,45 @@
+# Four string variable ${modelName} ${inFileName}, ${beforeFileName}, ${afterFileName} should be given from a shell
+
+kim init         ${modelName} metal
+kim query        a0 get_lattice_constant_cubic crystal=["diamond"] species=["Si"] units=["angstrom"]
+
+units metal                # Define units appropriate for metal simulations
+dimension 3                 # 3D simulation
+boundary s s p             # Periodic boundary conditions only in z direction 
+atom_style atomic
+
+# read_data EDIP_JustoBazantKaxiras_1998_Si__MO_958932894036_002_forlammps_deformed.txt
+
+read_data ${inFileName}
+
+
+
+
+
+
+kim interactions Si Si
+
+group fccbasis type 1
+
+compute per_atom_stress all stress/atom NULL  # Compute per-atom stress
+compute per_atom_force all property/atom fx fy fz  # Access per-atom forces
+
+thermo_style custom step fmax 
+thermo 30
+
+dump dump_before all custom 1 ${beforeFileName} id type x y z fx fy fz c_per_atom_stress[1] c_per_atom_stress[2] c_per_atom_stress[3] c_per_atom_stress[4] c_per_atom_stress[5] c_per_atom_stress[6]
+
+dump_modify dump_before sort id format float %20.15g
+
+run 0 
+undump dump_before  
+
+fix freeze fccbasis setforce 0.0 0.0 0.0
+
+min_style cg               # Conjugate gradient minimization
+minimize 1.0e-10 1.0e-10 10000 10000  # Energy minimization parameters
+
+dump dump_after all custom 1 ${afterFileName} id type x y z fx fy fz c_per_atom_stress[1] c_per_atom_stress[2] c_per_atom_stress[3] c_per_atom_stress[4] c_per_atom_stress[5] c_per_atom_stress[6]
+dump_modify dump_after sort id format float %20.15g
+run 0  
+undump dump_after  
