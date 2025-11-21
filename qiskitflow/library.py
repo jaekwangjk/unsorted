@@ -75,6 +75,87 @@ def compute_H1_H2_for_Convection_and_Diffusion_and_Source(nx, dx, C ,D, S):
     
     return H1, H2
     
+
+class Schrodingeriser:
+    
+    def __init__(self, wy, ny, shift=0, alpha=10, bzone=0):
+        self.wy = wy
+        self.ny = ny
+        self.shift = shift
+        self.alpha = alpha
+        self.bzone = bzone
+
+        # 1) y-grid 생성
+        self.y = np.linspace(
+            -np.pi*(wy/2 + shift),
+            np.pi*(wy/2 - shift),
+            num=ny,
+            endpoint=False
+        )
+
+        # 2) v_init 생성
+        bottom = np.exp(-np.pi*(wy/2 - shift))
+        v_init = np.zeros(ny)
+
+        for i, vy in enumerate(self.y):
+            if vy < -np.pi*(wy/2 + shift - bzone) or vy > np.pi*(wy/2 - shift - bzone):
+                v_init[i] = 0
+            elif vy < -np.pi*shift:
+                tmp = np.exp(alpha*(vy + shift*(1 + 1/alpha)*np.pi))
+                v_init[i] = max(tmp, bottom)
+            else:
+                v_init[i] = np.exp(-vy)
+
+        self.v_init = v_init
+
+        # 3) Fourier transform → fv, kv
+        self.fv = fft.fft(v_init, norm='forward')
+        self.kv = fft.fftfreq(ny) * ny * 2 / wy
+        
+# ==========================================================
+    # simulate(t, phi_init, H1, H2, nx, idx=10)
+    # ==========================================================
+    def simulate(self, t, phi_init, H1, H2, nx, idx=10):
+   
+        import numpy as np
+        from scipy.linalg import expm
+
+        # --- normalize phi_init ---
+        phi_init_norm = np.sqrt(np.sum(np.square(phi_init)))
+        phi0 = phi_init / phi_init_norm
+
+        # pick y-slice
+        y_idx = int(self.ny/2 + idx)
+
+        soln = np.zeros(nx, dtype=complex)
+
+        # --- loop over k modes ---
+        for i, k in enumerate(self.kv):
+
+            # (1) initial phase (Quantum initialize equivalent)
+            if np.abs(self.fv[i]) > 0:
+                phase = self.fv[i] / np.abs(self.fv[i])
+            else:
+                phase = 1.0 + 0j
+
+            init_k = phi0 * phase
+
+            # (2) Time evolution
+            M = 1j * k * H1 - H2
+            U = expm(M * t)
+            state_t = U @ init_k
+
+            # (3) Inverse transform contribution
+            soln += state_t * np.abs(self.fv[i]) * np.exp(
+                1j * np.pi * k * self.wy/2 * 2 * y_idx / self.ny
+            )
+
+        # (4) final scale restore
+        soln *= phi_init_norm
+        soln *= np.exp(self.y[y_idx])
+
+        return soln    
+
     
 def simulate(phi_init, H1,H2, t, nx, kv, fv, ny,wy,y, idx=10):
     
